@@ -7,7 +7,6 @@ import physical_params
 cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
 list(cec_modules.keys())[:10]
 module = cec_modules['Canadian_Solar_Inc__CS6K_270M']
-print(module)
 
 #constants needed
 Ns = module['N_s']
@@ -17,16 +16,42 @@ q = 1.602176634e-19
 #need reference temperature and irradiance
 ref_temp = 25
 ref_irradiance = 1000
-ref_a = module['a_ref']/Ns
+
+#getting more refference conditions
+Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
+    effective_irradiance=ref_irradiance,
+    temp_cell=ref_temp,
+    alpha_sc=module['alpha_sc'],
+    a_ref=module['a_ref'],
+    I_L_ref=module['I_L_ref'],
+    I_o_ref=module['I_o_ref'],
+    R_sh_ref=module['R_sh_ref'],
+    R_s=module['R_s'],
+    EgRef=1.121,
+    dEgdT=-0.0002677
+)
+#reference ideality 
+thermal_voltage = k*298.15/q
+ref_n = nNsVth/(Ns*thermal_voltage)
+ref_rsh = Rsh
 
 #in form (irradiance, real temperature)
 test_cases = [
-    (1000, 25),
-    (1000, 45),
+    (100, 25),
+    (100, 45),
+    (100, 65),
+
     (500, 25),
     (500, 45),
-    (100, 25),
-    (100, 45)
+    (500, 65),
+
+    (1000, 25),
+    (1000, 45),
+    (1000, 65),
+
+    (300, 35),
+    (700, 55),
+    (900, 60),
 ]
 
 @pytest.mark.parametrize("irradiance, real_temp", test_cases)
@@ -34,25 +59,25 @@ def test_ideality(irradiance, real_temp):
     k_temp_real = real_temp+273.15
     k_temp_ref = ref_temp+273.15
     #get the expected values
-    Iph, Isat, nNsVth, Rs, Rsh = pvlib.pvsystem.calcparams_cec(
+    Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
         effective_irradiance=irradiance,
         temp_cell=real_temp,
         alpha_sc=module['alpha_sc'],
-        a_ref=ref_a,
+        a_ref=module['a_ref'],
         I_L_ref=module['I_L_ref'],
         I_o_ref=module['I_o_ref'],
         R_sh_ref=module['R_sh_ref'],
         R_s=module['R_s'],
-        Adjust=module['Adjust']
+        EgRef=1.121,
+        dEgdT=-0.0002677
     )
     thermal_voltage = k*k_temp_real/q
     expected = nNsVth/(Ns*thermal_voltage)
 
     #adjust to per cell
-    a_ref_cell = ref_a/Ns
-    result = physical_params.calc_ideality(k_temp_real, k_temp_ref, a_ref_cell)
+    result = physical_params.calc_ideality(k_temp_real, k_temp_ref, ref_n)
     #Note: allow a slightly larger mismatch, due to a simpler model
-    assert np.isclose(result, expected, atol=0.2), f"Got {result}, expected {expected}"
+    assert np.isclose(result, expected, atol=0.1), f"Got {result}, expected {expected}"
 
 #reference reverse saturation current
 ref_isat = module['I_o_ref']
@@ -62,16 +87,17 @@ def test_isat(irradiance, real_temp):
     k_temp_real = real_temp+273.15
     k_temp_ref = ref_temp+273.15
     #get the expected values
-    Iph, Isat, nNsVth, Rs, Rsh = pvlib.pvsystem.calcparams_cec(
+    Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
         effective_irradiance=irradiance,
         temp_cell=real_temp,
         alpha_sc=module['alpha_sc'],
-        a_ref=ref_a,
+        a_ref=module['a_ref'],
         I_L_ref=module['I_L_ref'],
         I_o_ref=module['I_o_ref'],
         R_sh_ref=module['R_sh_ref'],
         R_s=module['R_s'],
-        Adjust=module['Adjust']
+        EgRef=1.121,
+        dEgdT=-0.0002677
     )
 
     expected = Isat
@@ -86,16 +112,17 @@ ref_iph = module['I_L_ref']
 @pytest.mark.parametrize("irradiance, real_temp", test_cases)
 def test_isat(irradiance, real_temp):
     #get the expected values
-    Iph, Isat, nNsVth, Rs, Rsh = pvlib.pvsystem.calcparams_cec(
+    Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
         effective_irradiance=irradiance,
         temp_cell=real_temp,
         alpha_sc=module['alpha_sc'],
-        a_ref=ref_a,
+        a_ref=module['a_ref'],
         I_L_ref=module['I_L_ref'],
         I_o_ref=module['I_o_ref'],
         R_sh_ref=module['R_sh_ref'],
         R_s=module['R_s'],
-        Adjust=module['Adjust']
+        EgRef=1.121,
+        dEgdT=-0.0002677
     )
 
     expected = Iph
@@ -103,3 +130,23 @@ def test_isat(irradiance, real_temp):
     #Note: allow a slightly larger mismatch, due to a simpler model
     assert np.isclose(result, expected, atol=1e-2), f"Got {result}, expected {expected}"
 
+@pytest.mark.parametrize("irradiance, real_temp", test_cases)
+def test_Rsh(irradiance, real_temp):
+    #get the expected values
+    Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
+        effective_irradiance=irradiance,
+        temp_cell=real_temp,
+        alpha_sc=module['alpha_sc'],
+        a_ref=module['a_ref'],
+        I_L_ref=module['I_L_ref'],
+        I_o_ref=module['I_o_ref'],
+        R_sh_ref=module['R_sh_ref'],
+        R_s=module['R_s'],
+        EgRef=1.121,
+        dEgdT=-0.0002677
+    )
+
+    expected = Rsh
+    result = physical_params.calc_rsh(ref_rsh, irradiance, ref_irradiance)
+    #Note: allow a slightly larger mismatch, due to a simpler model
+    assert np.isclose(result, expected, atol=1e-2), f"Got {result}, expected {expected}"

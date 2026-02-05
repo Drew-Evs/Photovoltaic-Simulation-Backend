@@ -27,6 +27,7 @@ class cell():
         self.calc_params()
         self.get_resist()
         self.get_max_voltage()
+        print(f"Iph={self.iph}, Isat={self.isat}, Rs={self.rs}, Rsh={self.rsh}, n={self.n}")
 
     #test run using pv libs
     def calc_params(self):
@@ -291,32 +292,32 @@ voltages = np.array(voltages)
 currents = np.array(current_targets)
 powers   = np.array(powers)
 
-# I–V
-plt.figure()
-plt.plot(voltages, currents)
-plt.xlabel("Voltage (V)")
-plt.ylabel("Current (A)")
-plt.title("I–V Curve")
-plt.grid(True)
-plt.savefig("iv_curve.png", dpi=300, bbox_inches="tight")
-plt.close()
+# # I–V
+# plt.figure()
+# plt.plot(voltages, currents)
+# plt.xlabel("Voltage (V)")
+# plt.ylabel("Current (A)")
+# plt.title("I–V Curve")
+# plt.grid(True)
+# plt.savefig("iv_curve.png", dpi=300, bbox_inches="tight")
+# plt.close()
 
-# P–V
-plt.figure()
-plt.plot(voltages, powers)
-plt.xlabel("Voltage (V)")
-plt.ylabel("Power (W)")
-plt.title("P–V Curve")
-plt.grid(True)
-plt.savefig("pv_curve.png", dpi=300, bbox_inches="tight")
-plt.close()
+# # P–V
+# plt.figure()
+# plt.plot(voltages, powers)
+# plt.xlabel("Voltage (V)")
+# plt.ylabel("Power (W)")
+# plt.title("P–V Curve")
+# plt.grid(True)
+# plt.savefig("pv_curve.png", dpi=300, bbox_inches="tight")
+# plt.close()
 
-# P–I
-plt.figure()
-plt.plot(currents, powers)
-plt.xlabel("Current (A)")
-plt.ylabel("Power (W)")
-plt.title("P–I Curve")
-plt.grid(True)
-plt.savefig("pi_curve.png", dpi=300, bbox_inches="tight")
-plt.close()
+# # P–I
+# plt.figure()
+# plt.plot(currents, powers)
+# plt.xlabel("Current (A)")
+# plt.ylabel("Power (W)")
+# plt.title("P–I Curve")
+# plt.grid(True)
+# plt.savefig("pi_curve.png", dpi=300, bbox_inches="tight")
+# plt.close()

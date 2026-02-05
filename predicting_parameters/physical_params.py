@@ -34,8 +34,8 @@ m_ref = 1.5
     - reference ideality factor
 @output operating ideality factor
 """
-def calc_ideality(real_temp, ref_temp, ref_a):
-    return ref_a/(k*real_temp/q)
+def calc_ideality(real_temp, ref_temp, ref_n):
+    return ref_n*(real_temp/ref_temp)
 
 """
 @func calculating reverse saturation current
@@ -47,8 +47,14 @@ def calc_ideality(real_temp, ref_temp, ref_a):
 @output operating reverse saturation current
 """
 def calc_isat(real_temp, ref_temp, ref_isat):
-    exponent = Eg/k * ((1/ref_temp) - (1/real_temp))
+    real_eg = calc_band_gap(ref_temp, real_temp)
+    exponent = 1/k * ((Eg/ref_temp) - (real_eg/real_temp))
     return ref_isat * (real_temp/ref_temp)**3 * np.exp(exponent)
+'''IMPORTANT - needs changing formula incorrect'''
+
+def calc_band_gap(ref_temp, real_temp):
+    return Eg/(1-0.0002677*(real_temp - ref_temp))
+
 
 """
 @func calculating photocurrent generated
