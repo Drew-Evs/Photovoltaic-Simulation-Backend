@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 
 #getting a panel to test
 cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-module = cec_modules['SunPower_SPR_X20_327']
+module = cec_modules['Canadian_Solar_Inc__CS1U_405MS']
 Ns = module['N_s']
+voc = 0.7*4
 
 #reference boltzmans and electrical charge
 k = 1.38e-23
@@ -27,7 +28,9 @@ class cell():
         self.calc_params()
         self.get_resist()
         self.get_max_voltage()
-        print(f"Iph={self.iph}, Isat={self.isat}, Rs={self.rs}, Rsh={self.rsh}, n={self.n}")
+
+        # print(f'After adjustment')
+        # print(f"Iph={self.iph}, Isat={self.isat}, Rs={self.rs}, Rsh={self.rsh}, n={self.n}")
 
     #test run using pv libs
     def calc_params(self):
@@ -52,8 +55,10 @@ class cell():
         self.rs = Rs
         self.rsh = Rsh
         self.n = q*nNsVth/(k*self.kT*Ns)
+        # print(f'Before adjustment')
+        # print(f"Iph={self.iph}, Isat={self.isat}, Rs={self.rs}, Rsh={self.rsh}, n={self.n}")
 
-    #get the full voltage of the panel and divide by number of cells to get the correct voltage
+    #get the ful voltage of the panel and divide by number of cells to get the correct voltage
     #need to get a series of points
     #then from taht with a known isat, n and iph can extract Rs and Rsh
     def get_points(self):
@@ -112,30 +117,38 @@ class cell():
 
         # initial guess
         x0 = [0.1, 1000]
-        sol = least_squares(residuals, x0, bounds=([0, 0],[np.inf, np.inf]))
+        sol = least_squares(residuals, x0, bounds=([0, 0],[5, 1000]))
         self.rs, self.rsh = sol.x
 
-        # I_points = np.linspace(0, self.iph*0.99, 100)
-        # V_points = []
+        I_points = np.linspace(0, self.iph, 100)
+        V_points = []
 
-        # def iv_eq(V, I):
-        #     exponent = (V + I * self.rs)/(self.n*Vt)
-        #     exponent_term = self.isat * (np.exp(np.clip(exponent, -50, 50)) -1)
-        #     rsh_term = (V + I * self.rs)/self.rsh
-        #     return (self.iph - exponent_term - rsh_term - I)
+        print("In graph:")
+        print(f"Iph={self.iph}, Isat={self.isat}, Rs={self.rs}, Rsh={self.rsh}, n={self.n}")
+        print(f'nNsVth is {self.n*Vt}')
+        print(f'Currents are {I_points}')
 
-        # for I in I_points:
-        #     V_guess = 0.7
-        #     V_sol = fsolve(iv_eq, V_guess, args=(I, ))[0]
-        #     V_points.append(V_sol)
+        def iv_eq(V, I):        
+            exponent = (V + I * self.rs)/(self.n*Vt)
+            exponent_term = self.isat * (np.exp(np.clip(exponent, -50, 50)) -1)
+            rsh_term = (V + I * self.rs)/self.rsh
+            return (self.iph - exponent_term - rsh_term - I)
 
-        # # Optionally plot it
-        # plt.plot(V_points, I_points)
-        # plt.xlabel("Voltage (V)")
-        # plt.ylabel("Current (A)")
-        # plt.title("Single Cell I-V Curve")
-        # plt.grid(True)
-        # plt.savefig("single_cell_iv_curve.png")
+        for I in I_points:
+            V_guess = 0.7
+            V_sol = fsolve(iv_eq, V_guess, args=(I, ))[0]
+            V_points.append(V_sol)
+
+        print(f'Voltages are {V_points}')
+        
+
+        # Optionally plot it
+        plt.plot(V_points, I_points)
+        plt.xlabel("Voltage (V)")
+        plt.ylabel("Current (A)")
+        plt.title("Single Cell I-V Curve")
+        plt.grid(True)
+        plt.savefig("single_cell_iv_curve.png")
 
     #gets the max voltage (when current = 0)
     def get_max_voltage(self):
@@ -203,94 +216,261 @@ def residuals(x, cells, d_count, current_target):
     t_bd = 308.5 #(kelvin)
     for i in range(d):
         #adding a resistance to the circuit
+        arg_bd = np.clip((q * v_bd[i]) / (n_bd * k * t_bd), -50, 50)
+        res.append(-i_bd[i] + i_sbd * (np.exp(arg_bd) - 1))
+
+    return res
+
+#target voltage load to test for 
+def voltage_residuals(x, cells, d_count, voltage_load):
+    #need the number of cells, number of diodes and the number of cells per diode
+    c = len(cells)
+    d = d_count
+    p = c//d
+
+    #gets the current values of voltage and current from x (cells and bypass diodes)
+    v_c = x[0:c]
+    i_c = x[c:2*c]
+    v_bd = x[2*c:2*c+d]
+    i_bd = x[2*c+d:2*c+2*d]
+    i_panel = x[-1]
+
+    #stores the residuals
+    res = [] 
+
+    #eq 7 load voltage
+    res.append(np.sum(v_c) - voltage_load)
+
+    #eq 8 mesh equations for each bd loop
+    #the voltage in the byass diode should be opposite to that in the cells
+    for i in range(d):
+        start, end = i*p, (i+1)*p
+        res.append(v_bd[i] + np.sum(v_c[start:end]))
+
+    #eq 9 - each cell should have the same current inside bd loops
+    #and eq 10/11 current of the panel is equal to each cell plus bypass diode
+    for bd in range(d):
+        start = bd * p
+        end = (bd + 1) * p
+        for i in range(start, end - 1):
+            res.append((i_c[i] - i_c[i + 1]) * 50)
+
+        res.append(i_panel - i_c[start] - i_bd[bd])
+
+    #eq 12 single cell current voltage relation
+    #using constant values for boltzmans and electrical charge
+    for i, cell in enumerate(cells):
+        exponent = q*(v_c[i] + i_c[i]*cell.rs)/(cell.n*k*cell.kT)
+        exp_term = cell.isat * np.exp(np.clip(exponent, -50, 50))
+        rsh_term = (v_c[i] + i_c[i]*cell.rs)/cell.rsh
+        res.append(-i_c[i] + cell.iph - exp_term - rsh_term)
+
+    #eq 13 same for the bypass diodes
+    #using constants for saturation current ideality and temperature
+    i_sbd = 1.6e-9
+    n_bd = 1
+    t_bd = 308.5 #(kelvin)
+    for i in range(d):
+        #adding a resistance to the circuit
         v_eff = v_bd[i] - i_bd[i]*0.05
         arg_bd = np.clip((q * v_bd[i]) / (n_bd * k * t_bd), -50, 50)
         res.append(-i_bd[i] + i_sbd * (np.exp(arg_bd) - 1))
 
     return res
 
+#function to test residuals
+def test_residuals():
+    module_cells = [cell(800, 25), cell(1000, 25), cell(100, 25), cell(500, 25)]
+
+    c = len(module_cells)
+    d = 2
+    p = c//2
+
+    low_bound = np.array([-0.7]*c + [-np.inf]*(c + d + d) + [0])
+    low_bound[c:2*c] = 0
+    high_bound = np.array([np.inf]*(c + c + d + d + 1))
+    high_bound[0:c] = [cell.max_voltage for cell in module_cells]
+
+    powers = []
+    currents = []
+    voltages = []
+
+    #test all currents between the max iph and 0
+    voltage_targets = np.linspace(0, voc, 150)
+
+    for voltage_target in voltage_targets:
+        #intial guess
+        x0 = np.concatenate([
+            [0.4]*c,
+            [0.1]*c,
+            [0.0]*d,
+            [0.0]*d,
+            [0.1]
+        ])
+
+        solution = least_squares(voltage_residuals, x0, bounds=(low_bound, high_bound),
+            args=(module_cells, d, voltage_target))
+
+        #get the bd/cells currents and voltages
+        v_c = solution.x[0:c]
+        i_c = solution.x[c:2*c]
+        v_bd = solution.x[2*c:2*c+d]
+        i_bd = solution.x[2*c+d:2*c+2*d]
+        i_panel = solution.x[-1]
+
+        #set voltage to 0 if bd is on
+        # for i in range(d):
+        #     if i_bd[i] > 0:
+        #         for j in range(p):
+        #             v_c[p*i+j] = 0
+
+
+        print("Cell voltages:")
+        for idx, v in enumerate(v_c):
+            print(f"  Cell {idx}: V = {v}")
+
+        print("\nCell currents:")
+        for idx, i in enumerate(i_c):
+            print(f"  Cell {idx}: I = {i}")
+
+        print("\nBypass diode voltages:")
+        for idx, v in enumerate(v_bd):
+            print(f"  Bypass {idx}: V = {v}")
+
+        print("\nBypass diode currents:")
+        for idx, i in enumerate(i_bd):
+            print(f"  Bypass {idx}: I = {i}")
+
+        voltage_load = np.sum(v_c)
+
+        #calculate power voltage and current
+        voltage = np.sum(v_c)
+        power = voltage_load * i_panel
+
+        powers.append(power)
+        voltages.append(voltage_load)
+        currents.append(i_panel)
+
+    # I–V
+    plt.figure()
+    plt.plot(voltages, currents)
+    plt.xlabel("Voltage (V)")
+    plt.ylabel("Current (A)")
+    plt.title("I–V Curve")
+    plt.grid(True)
+    plt.savefig("graphs/iv_curve.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # P–V
+    plt.figure()
+    plt.plot(voltages, powers)
+    plt.xlabel("Voltage (V)")
+    plt.ylabel("Power (W)")
+    plt.title("P–V Curve")
+    plt.grid(True)
+    plt.savefig("graphs/pv_curve.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # P–I
+    plt.figure()
+    plt.plot(currents, powers)
+    plt.xlabel("Current (A)")
+    plt.ylabel("Power (W)")
+    plt.title("P–I Curve")
+    plt.grid(True)
+    plt.savefig("graphs/pi_curve.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+#test_residuals()
+
+
+cell(1000, 45)
+# cell(100, 25)
+# cell(1000, 25)
+
+
 #test run
-module_cells = [cell(1000, 25), cell(700, 25), cell(100, 25), cell(500, 25)]
-max_iph = max(cell.iph for cell in module_cells)
-for i, c in enumerate(module_cells):
-    print(f"Cell {i}")
-    print(f" iph = {c.iph:.6e} A")
-    print(f" isat = {c.isat:.6e} A")
-    print(f" rs = {c.rs:.6f} Ω")
-    print(f" rsh = {c.rsh:.6f} Ω")
-    print(f" n = {c.n:.4f}")
-    print("-" * 30)
+# module_cells = [cell(1000, 25), cell(700, 25), cell(100, 25), cell(500, 25)]
+# max_iph = max(cell.iph for cell in module_cells)
+# for i, c in enumerate(module_cells):
+#     print(f"Cell {i}")
+#     print(f" iph = {c.iph:.6e} A")
+#     print(f" isat = {c.isat:.6e} A")
+#     print(f" rs = {c.rs:.6f} Ω")
+#     print(f" rsh = {c.rsh:.6f} Ω")
+#     print(f" n = {c.n:.4f}")
+#     print("-" * 30)
 
-c = len(module_cells)
-d = 2
-p = c//2
+# c = len(module_cells)
+# d = 2
+# p = c//2
 
-low_bound = np.array([-0.7]*c + [-np.inf]*(c + d + d) + [-0.7*c])
-low_bound[c:2*c] = 0
-high_bound = np.array([np.inf]*(c + c + d + d + 1))
-high_bound[0:c] = [cell.max_voltage for cell in module_cells]
+# low_bound = np.array([-0.7]*c + [-np.inf]*(c + d + d) + [-0.7*c])
+# low_bound[c:2*c] = 0
+# high_bound = np.array([np.inf]*(c + c + d + d + 1))
+# high_bound[0:c] = [cell.max_voltage for cell in module_cells]
 
-powers = []
-voltages = []
+# powers = []
+# voltages = []
 
-#test all currents between the max iph and 0
-current_targets = np.linspace(0, max_iph, 30)
+# #test all currents between the max iph and 0
+# current_targets = np.linspace(0, max_iph, 30)
 
-for current_target in current_targets:
-    #intial guess
-    x0 = np.concatenate([
-        [0.4]*c,
-        [current_target]*c,
-        [0.0]*d,
-        [0.0]*d,
-        [np.sum([cell.max_voltage for cell in module_cells])]
-    ])
+# for current_target in current_targets:
+#     #intial guess
+#     x0 = np.concatenate([
+#         [0.4]*c,
+#         [current_target]*c,
+#         [0.0]*d,
+#         [0.0]*d,
+#         [np.sum([cell.max_voltage for cell in module_cells])]
+#     ])
 
-    solution = least_squares(residuals, x0, bounds=(low_bound, high_bound),
-        args=(module_cells, d, current_target))
+#     solution = least_squares(residuals, x0, bounds=(low_bound, high_bound),
+#         args=(module_cells, d, current_target))
 
-    #get the bd/cells currents and voltages
-    v_c = solution.x[0:c]
-    i_c = solution.x[c:2*c]
-    v_bd = solution.x[2*c:2*c+d]
-    i_bd = solution.x[2*c+d:2*c+2*d]
-    voltage_load = solution.x[-1]
+#     #get the bd/cells currents and voltages
+#     v_c = solution.x[0:c]
+#     i_c = solution.x[c:2*c]
+#     v_bd = solution.x[2*c:2*c+d]
+#     i_bd = solution.x[2*c+d:2*c+2*d]
+#     voltage_load = solution.x[-1]
 
-    print("-"*50)
-    print(f"For target {current_target:.2f}")
+#     print("-"*50)
+#     print(f"For target {current_target:.2f}")
 
-    print("\nCELLS")
-    print(f"{'Index':>5} | {'V_c (V)':>8} | {'I_c (A)':>8}")
-    print("-" * 28)
-    for i in range(c):
-        print(f"{i:5d} | {v_c[i]:8.2f} | {i_c[i]:8.2f}")
+#     print("\nCELLS")
+#     print(f"{'Index':>5} | {'V_c (V)':>8} | {'I_c (A)':>8}")
+#     print("-" * 28)
+#     for i in range(c):
+#         print(f"{i:5d} | {v_c[i]:8.2f} | {i_c[i]:8.2f}")
 
 
-    print("\nBYPASS DIODES")
-    print(f"{'Index':>5} | {'V_bd (V)':>9} | {'I_bd (A)':>9}")
-    print("-" * 31)
-    for i in range(d):
-        print(f"{i:5d} | {v_bd[i]:9.2f} | {i_bd[i]:9.2f}")
+#     print("\nBYPASS DIODES")
+#     print(f"{'Index':>5} | {'V_bd (V)':>9} | {'I_bd (A)':>9}")
+#     print("-" * 31)
+#     for i in range(d):
+#         print(f"{i:5d} | {v_bd[i]:9.2f} | {i_bd[i]:9.2f}")
 
-    print("\nLOAD VOLTAGE")
-    print(f'Load Voltage is {voltage_load}')
+#     print("\nLOAD VOLTAGE")
+#     print(f'Load Voltage is {voltage_load}')
 
-    #set voltage to 0 if bd is on
-    for i in range(d):
-        if i_bd[i] > 0:
-            for j in range(p):
-                v_c[p*i+j] = 0
+#     #set voltage to 0 if bd is on
+#     for i in range(d):
+#         if i_bd[i] > 0:
+#             for j in range(p):
+#                 v_c[p*i+j] = 0
 
-    #calculate power voltage and current
-    voltage = np.sum(v_c)
-    power = np.sum(v_c*i_c)
+#     #calculate power voltage and current
+#     voltage = np.sum(v_c)
+#     power = np.sum(v_c*i_c)
 
-    powers.append(power)
-    voltages.append(voltage_load)
+#     powers.append(power)
+#     voltages.append(voltage_load)
 
-voltages = np.array(voltages)
-currents = np.array(current_targets)
-powers   = np.array(powers)
+# voltages = np.array(voltages)
+# currents = np.array(current_targets)
+# powers   = np.array(powers)
 
 # # I–V
 # plt.figure()
