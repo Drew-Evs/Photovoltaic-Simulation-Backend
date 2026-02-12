@@ -11,26 +11,21 @@ import pvlib
 from pvlib.pvsystem import i_from_v
 import os
 
-
-#reference boltzmans and electrical charge
-k = 1.38e-23
-q = 1.6e-19
-
-'''datasheet conditions: https://www.jinksolar.com/product-item-27.html
+'''datasheet conditions: https://cdn.enfsolar.com/Product/pdf/Crystalline/5bbdb7c34b4dc.pdf
 isc = short circuit current
 vmp = voltage at max power point
 voc = open circuit voltage
 imp = current at max power point
 '''
-isc = 9.65
-vmp = 44.3
-voc = 53.5
-imp = 9.16
-Ns = 81
+# isc = 9.65
+# vmp = 44.3
+# voc = 53.5
+# imp = 9.16
+# Ns = 81
 
-#get the approximations for c1 and c2
-c1 = isc
-c2 = (vmp - voc) / (np.log(1-imp/isc))
+# #get the approximations for c1 and c2
+# c1 = isc
+# c2 = (vmp - voc) / (np.log(1-imp/isc))
 
 #using least square to solve c1 and c2
 def c_approx(c1, c2):
@@ -68,33 +63,33 @@ def ITA(V, c1, c2):
     return isc - c1 * voc_exp * (v_exp-1)
 
 #solving simultaneous to get correct c1/c2
-new_c1, new_c2 = c_approx(c1, c2)
+# new_c1, new_c2 = c_approx(c1, c2)
 
-#generating curve
-volts = np.linspace(0, voc, 300)
-ita_currents = [ITA(V, new_c1, new_c2) for V in volts]
+# #generating curve
+# volts = np.linspace(0, voc, 300)
+# ita_currents = [ITA(V, new_c1, new_c2) for V in volts]
 
-#comparing to pvlib
-cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-module = cec_modules['Canadian_Solar_Inc__CS1U_405MS']
-NsVth = k*298.15*Ns/q
+# #comparing to pvlib
+# cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
+# module = cec_modules['Canadian_Solar_Inc__CS1U_405MS']
+# NsVth = k*298.15*Ns/q
 
-Iph, I0, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
-    effective_irradiance=1000,
-    temp_cell=25,
-    alpha_sc=module['alpha_sc'],
-    a_ref=module['a_ref'],
-    I_L_ref=module['I_L_ref'],
-    I_o_ref=module['I_o_ref'],
-    R_sh_ref=module['R_sh_ref'],
-    R_s=module['R_s'],
-    EgRef=1.121,
-    dEgdT=-0.0002677
-)
+# Iph, I0, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
+#     effective_irradiance=1000,
+#     temp_cell=25,
+#     alpha_sc=module['alpha_sc'],
+#     a_ref=module['a_ref'],
+#     I_L_ref=module['I_L_ref'],
+#     I_o_ref=module['I_o_ref'],
+#     R_sh_ref=module['R_sh_ref'],
+#     R_s=module['R_s'],
+#     EgRef=1.121,
+#     dEgdT=-0.0002677
+# )
 
-lib_currents = i_from_v(volts, Iph, I0, Rs, Rsh, nNsVth)
+# lib_currents = i_from_v(volts, Iph, I0, Rs, Rsh, nNsVth)
 
-# Create folder if it doesn't exist
+# #Create folder if it doesn't exist
 # os.makedirs("graphs", exist_ok=True)
 
 # # Plot both curves
@@ -114,9 +109,12 @@ lib_currents = i_from_v(volts, Iph, I0, Rs, Rsh, nNsVth)
 
 
 #use least square to find the correct reference conditions
-def desoto_residuals(x, Isat, residuals_arr=[], values_history=[]):
-    #residuals to minimuse
+def desoto_residuals(x, Isat, isc, vmp, voc, imp, Ns, residuals_arr=[], values_history=[]):
+    #residuals to minimuse 
     res = []
+    
+    k = 1.38e-23
+    q = 1.6e-19
 
     #get the parameters from x
     Iph, Rs, Rsh, n = x
@@ -158,7 +156,7 @@ def ita_residuals(x, currents, volts, Isat):
 
     #get the parameters from x
     Iph, Rs, Rsh, n = x
-
+ 
     vth = (n*k*298.15*Ns)/q
     for j, V in enumerate(volts):
         I = currents[j]
@@ -172,13 +170,13 @@ def ita_residuals(x, currents, volts, Isat):
         res.append(residual)
 
     #testing equation 14 - iph rs and rsh 
-    output = Iph - (Rsh+Rs)/Rsh * isc
-    res.append(output*10)
+    # output = Iph - (Rsh+Rs)/Rsh * isc
+    # res.append(output*10)
 
     #testing gradient residuals
     slope_sc = (currents[1] - currents[0]) / (volts[1] - volts[0])
     slope_calc_sc = -Isat/vth - 1/Rsh
-    ouput = slope_calc_sc - slope_sc
+    output = slope_calc_sc - slope_sc
     res.append(output*10)
 
     numerator = vmp*(vmp+imp*Rs)
@@ -204,6 +202,12 @@ def compare_methods():
 
     ita_voltages = generate_curve(lib_currents, ita_sol.x, Isat)
     desoto_voltages = generate_curve(lib_currents, desoto_sol.x, Isat)
+
+    print(f" iph = {desoto_sol.x[0]:.6e} A")
+    #print(f" isat = {ita_sol.x[1]:.6e} A")
+    print(f" rs = {desoto_sol.x[1]:.6f} Ω")
+    print(f" rsh = {desoto_sol.x[2]:.6f} Ω")
+    print(f" n = {desoto_sol.x[3]:.4f}")
         
     plt.figure(figsize=(8,5))
     plt.plot(ita_voltages, lib_currents, label='ITA Model', color='blue')
@@ -233,8 +237,6 @@ def generate_curve(currents, x, Isat):
     voltages = [fsolve(iv_equation, v_guess, args=(I,))[0] for I in currents]
     return voltages
 
-compare_methods()
-
 '''
 @func uses the ITA to generate points on a curve, then a least square solver to get the paramters
 ---- CURRENTLY USES THESE FROM THE FILE WILL ADJUST FOR LATER WORK ----
@@ -242,13 +244,12 @@ compare_methods()
     - the datasheet conditions
 @returns sol.x - the parameters of the I-V equation at reference condition
 '''
-def get_reference_params(verbose=False):
-    #generate simulated curve
-    volts = np.linspace(0, voc, 100)
-    currents = [ITA(V, c1, c2) for V in volts]
-
-    slope_sc = (currents[1] - currents[0]) / (volts[1] - volts[0])  # slope near V=0
-    slope_oc = (currents[-1] - currents[-2]) / (volts[-1] - volts[-2])  # slope near V=Voc
+def get_reference_params(params, verbose=False):
+    #datasheet conditions
+    isc, vmp, voc, imp, Ns = params
+    #reference boltzmans and electrical charge
+    k = 1.38e-23
+    q = 1.6e-19
 
     #Iph, Isat, Rs, Rsh, n - initial guess    
     x0 = [isc, 0.1, 100, 1]
@@ -262,25 +263,16 @@ def get_reference_params(verbose=False):
     residuals_arr = []
     values_history = []
 
-    sol = least_squares(desoto_residuals, x0, args=(2.809e-11, residuals_arr, values_history,), bounds=bounds)
+    Isat = 2.809e-11
+
+    sol = least_squares(desoto_residuals, x0, args=(2.809e-11, isc, vmp, voc, imp, Ns, residuals_arr, values_history,), bounds=bounds)
 
     if verbose:
         print(f" iph = {sol.x[0]:.6e} A")
-        #print(f" isat = {sol.x[1]:.6e} A")
+        print(f" isat = {Isat:.6e} A")
         print(f" rs = {sol.x[1]:.6f} Ω")
         print(f" rsh = {sol.x[2]:.6f} Ω")
         print(f" n = {sol.x[3]:.4f}")
-        
-        # plt.figure(figsize=(8,5))
-        # plt.plot(volts, currents, label='Synthetic I-V (single-diode)')
-        # plt.plot([vmp, voc, 0], [imp, 0, isc], 'ro', label='Datasheet points')
-        # plt.xlabel('Voltage [V]')
-        # plt.ylabel('Current [A]')
-        # plt.title('Synthetic I-V curve using ITA-based extraction')
-        # plt.grid(True)
-        # plt.legend()
-
-        # plt.savefig("synthetic_IV_curve.png", dpi=300)
 
         #graphing residuals against results
         iters = np.arange(len(residuals_arr))
