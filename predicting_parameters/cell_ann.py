@@ -3,7 +3,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-from single_cell import cell
+from predicting_parameters.single_cell import cell
 import random
 import pandas as pd
 import os
@@ -32,9 +32,9 @@ def create_dataset():
     y0 = []
 
     #sees if data exists and if not generates own 
-    if os.path.exists("pv_training_data.csv"):
+    if os.path.exists("predicting_parameters/pv_training_data.csv"):
         print("Loading existing dataset...")
-        df = pd.read_csv("pv_training_data.csv")
+        df = pd.read_csv("predicting_parameters/pv_training_data.csv")
         x = df[['irr', 'temp']].values
         y = df[['iph', 'isat', 'rsh', 'a']].values
     else:
