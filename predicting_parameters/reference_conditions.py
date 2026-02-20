@@ -17,11 +17,11 @@ vmp = voltage at max power point
 voc = open circuit voltage
 imp = current at max power point
 '''
-# isc = 9.65
-# vmp = 44.3
-# voc = 53.5
-# imp = 9.16
-# Ns = 81
+isc = 9.65
+vmp = 44.3
+voc = 53.5
+imp = 9.16
+Ns = 81
 
 # #get the approximations for c1 and c2
 # c1 = isc
@@ -310,3 +310,5 @@ def get_reference_params(params, verbose=False):
 
 
     return sol.x[0], 2.809e-11, sol.x[1], sol.x[2], sol.x[3]
+
+a_guess = 0.027*Ns - 0.0172

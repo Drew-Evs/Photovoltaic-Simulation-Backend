@@ -1,10 +1,10 @@
-import reference_conditions
-import physical_params
+import cell_ann
 import refactored_prediction
+
 import numpy as np
-from scipy.optimize import fsolve, least_squares
-import os
+from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
+import os
 
 #for profiling
 import cProfile
@@ -22,41 +22,72 @@ k = 1.38e-23
 q = 1.6e-19
 
 #a class used to calculate the parameters of a single cell
-class cell():
+class Cell():
+    #ANN at the class level only needs to be initiated once
+    model = None
+    X_scaler = None
+    y_scaler = None
+
+    #using rs as a constant
+    rs = None
+
+    #creating ann at class level
+
+    @classmethod
+    def initiate_class(cls, module_name, Ns):
+        cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann()
+
+        #only need to get the rs everything else calculated by ann
+        _, _, cls.rs, _, _, = refactored_prediction.getting_parameters(25, 1000, module_name)
+        cls.rs = cls.rs/Ns
+        
+
     #initiate with a irradiance, temperature and conditions from the datasheet
     #temp in kelvin
     def __init__(self, irr, temp, datasheet_conditions, module):
-        self.irr = irr
+        self.irradiance = irr
+        self.temperature = temp
+        self.module_name = module
+
         self.kT = temp + 273.15
-        self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
-        self.voc_per_cell = self.voc/self.Ns
         self.Vth = k * self.kT / q
 
-        #using refactored params to calculate
-        actual_params = refactored_prediction.getting_parameters(temp, irr, module_name)
+        self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
+        self.voc_per_cell = self.voc/self.Ns
 
-        #refactor to use self.a (modified ideality factor)
-        self.iph, self.isat, self.rs, self.rsh, self.a = actual_params
+        if Cell.model is None:
+            Cell.initiate_class(self.module_name, self.Ns)
 
-        #run all the methods to get the actual params given the conditions
-        self.get_resist()
-
+        self.predict_params()
 
     #using i-v law to calc voltage
     def iv_equation(self, V, I):
-        exponent = (V + I * self.rs)/(self.a)
+        exponent = (V + I * Cell.rs)/(self.a)
         exponent_term = self.isat * (np.exp(np.clip(exponent, -50, 50)) -1)
-        rsh_term = (V + I * self.rs)/self.rsh
+        rsh_term = (V + I * Cell.rs)/self.rsh
         return (self.iph - exponent_term - rsh_term - I)
 
-    #generate points on an I-V curve
-    def get_points(self):
+    #use the ann
+    def predict_params(self):
+        X = [[self.irradiance, self.temperature]]
+        X_scaled = Cell.X_scaler.transform(X)
+
+        y_scaled = Cell.model.predict(X_scaled)
+        y = Cell.y_scaler.inverse_transform(y_scaled)
+
+        self.iph, log_isat, self.rsh, self.a = y[0]
+
+        #reverse the logarithm
+        self.isat = 10 ** log_isat
+
+    #get the curve for graphing
+    def get_curve(self):
         max_v = 0
         voltages = []
 
         #using solver to calculate V from I
         current_targets = np.linspace(0, self.iph, 200)
-        v_guess = self.voc_per_cell*self.Ns
+        v_guess = self.voc_per_cell * 0.99
         for I in current_targets:
             sol = fsolve(self.iv_equation, v_guess, args=(I,))[0]
 
@@ -64,55 +95,8 @@ class cell():
             v_guess = sol
 
         #output of the points
-        output = [(V, I) for V, I in zip(voltages, current_targets)]
-        return output
-
-    #use a solver to get rs and rsh
-    def get_resist(self):
-        points = self.get_points()
-        points = [(V/self.Ns, I) for (V, I) in points]
-        #set nsvth to new value per cell
-        self.a = self.a / self.Ns
-
-        def residuals(x):
-            Rs, Rsh = x
-            res = []
-            for V, I in points:
-                I_calc = self.iph - self.isat*(np.exp(np.clip((V + I*Rs)/(self.a), -50, 50)) - 1) - (V + I*Rs)/Rsh
-                res.append(I_calc - I)
-            return res
-
-        # initial guess
-        '''find out when this broke and fix'''
-        x0 = [self.rs/self.Ns, self.rsh/self.Ns]
-        sol = least_squares(residuals, x0, bounds=([0.001, 1],[75, 1e6]))
-        self.Ns = 1
-        self.rs, self.rsh = sol.x
-        
-    #draw a final graph
-    def plot_cell_graph(self):
-        points = self.get_points()
-        V = [p[0] for p in points]
-        I = [p[1] for p in points]
-
-        plt.figure()
-        plt.plot(V, I)
-        plt.xlabel("Voltage (V)")
-        plt.ylabel("Current (A)")
-        plt.title(f"I–V Curve | G={self.irr} W/m², T={self.kT} K")
-        plt.grid(True)
-
-        # save
-        filename = f"cell_graphs/IV_G{self.irr}_T{int(self.kT)}.png"
-        plt.savefig(filename, dpi=300, bbox_inches="tight")
-        plt.close()
-
-    #get the curve for graphing
-    def get_curve(self):
-        points = self.get_points()
-        V = [p[0] for p in points]
-        I = [p[1] for p in points]
-        return V, I
+        return voltages, current_targets
+    
 
 #use the test conditions to generate curves for each conditions
 def plot_test_cases(test_cases):
@@ -128,8 +112,9 @@ def plot_test_cases(test_cases):
     plt.figure()
 
     for irr, temp in test_cases:
-        test_cell = cell(irr, temp, datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+        test_cell = Cell(irr, temp, datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
         V, I = test_cell.get_curve()
+
 
         plt.plot(V, I)
 
@@ -148,7 +133,7 @@ def plot_test_cases(test_cases):
     plt.title("I–V Curves Under Different Conditions")
     plt.grid(True)
 
-    filename = "cell_graphs/IV_comparison.png"
+    filename = "cell_graphs/IV_comparison_ANN.png"
     plt.savefig(filename, dpi=300, bbox_inches="tight")
     plt.show()
     plt.close()
@@ -162,7 +147,29 @@ def cell_profiling(datasheet_conditions):
         irr = random.randint(*irr_bounds)
         temp = random.randint(*temp_bounds)
 
-        test_cell = cell(irr, temp, datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+        test_cell = Cell(irr, temp, datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+    #V, I = test_cell.get_curve()
+    #     plt.plot(V, I)
+
+    #     #plot with a small label
+    #     idx = int(len(V) * 0.85)
+
+    #     plt.text(
+    #         V[idx],
+    #         I[idx],
+    #         f"G={irr}, T={temp}C",
+    #         fontsize=1   # smaller text
+    #     )
+
+    # plt.xlabel("Voltage (V)")
+    # plt.ylabel("Current (A)")
+    # plt.title("I–V Curves Under Different Conditions")
+    # plt.grid(True)
+
+    # filename = "cell_graphs/Many_IV_comparison_ANN.png"
+    # plt.savefig(filename, dpi=300, bbox_inches="tight")
+    # plt.show()
+    # plt.close()
 
 
 def run_profile():
@@ -188,7 +195,6 @@ def run_profile():
     print(s.getvalue())
 
 if __name__ == "__main__":
-    #need temp to be in kelvin
     test_cases = [
         (100, 25),
         (500, 25),
@@ -199,14 +205,6 @@ if __name__ == "__main__":
         (900, 65),
     ]
 
-    plot_test_cases(test_cases)
+    #plot_test_cases(test_cases)
 
-
-'''
-commands to run
-python -m cProfile -o output.prof single_cell.py
-
-then view with snakeviz
-pip install snakeviz
-snakeviz output.prof
-'''
+    run_profile()

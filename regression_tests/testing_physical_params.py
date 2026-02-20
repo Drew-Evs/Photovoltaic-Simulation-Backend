@@ -14,6 +14,7 @@ from predicting_parameters import physical_params
 cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
 list(cec_modules.keys())[:10]
 module = cec_modules['Canadian_Solar_Inc__CS6K_270M']
+print(module)
 
 #constants needed
 Ns = module['N_s']
@@ -40,6 +41,7 @@ Iph, Isat, Rs, Rsh, nNsVth = pvlib.pvsystem.calcparams_cec(
 thermal_voltage = k*298.15/q
 ref_n = nNsVth/(Ns*thermal_voltage)
 ref_rsh = Rsh
+ref_isat = Isat
 
 #in form (irradiance, real temperature)
 test_cases = [
@@ -86,7 +88,7 @@ test_cases = [
 #     assert np.isclose(result, expected, atol=0.1), f"Got {result}, expected {expected}"
 
 #reference reverse saturation current
-ref_isat = module['I_o_ref']
+#ref_isat = module['I_o_ref']
 
 @pytest.mark.parametrize("irradiance, real_temp", test_cases)
 def test_isat(irradiance, real_temp):
