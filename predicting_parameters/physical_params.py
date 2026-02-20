@@ -52,22 +52,9 @@ def calc_ideality(real_temp, ref_temp, ref_n):
 @output operating reverse saturation current
 """
 def calc_isat(real_temp, ref_temp, ref_isat):
-    # real_eg = calc_band_gap(ref_temp, real_temp)
-    # exponent = (Eg_ref/(k_ev*ref_temp)) - (real_eg/(k_ev*real_temp))
-    # return ref_isat * (real_temp/ref_temp)**3 * np.exp(exponent)    
-    Iph, Is, _, _, nNsVth = pvlib.pvsystem.calcparams_desoto(
-        effective_irradiance=1000,
-        temp_cell=real_temp,
-        alpha_sc=module['alpha_sc'],
-        a_ref=module['a_ref'],
-        I_L_ref=module['I_L_ref'],
-        I_o_ref=module['I_o_ref'],
-        R_sh_ref=module['R_sh_ref'],
-        R_s=module['R_s'],
-        EgRef=1.121,
-        dEgdT=-0.0002677
-    )
-    return Is
+    real_eg = calc_band_gap(ref_temp, real_temp)
+    exponent = (1/k_ev) * (Eg_ref/ref_temp - real_eg/real_temp)
+    return ref_isat * (real_temp/ref_temp)**3 * np.exp(exponent)    
 '''IMPORTANT - needs changing formula incorrect'''
 
 def calc_band_gap(T, T_ref=298.15):
