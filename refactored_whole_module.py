@@ -42,7 +42,7 @@ class Module():
         res = [] 
 
         #eq 7 load voltage
-        res.append(np.sum(v_c) - voltage_load)
+        res.append((np.sum(v_c) - voltage_load)*10)
 
         #eq 8 mesh equations for each bd loop
         #the voltage in the byass diode should be opposite to that in the cells
@@ -56,7 +56,7 @@ class Module():
             start = bd * p
             end = (bd + 1) * p
             for i in range(start, end - 1):
-                res.append(i_c[i] - i_c[i + 1]) 
+                res.append((i_c[i] - i_c[i + 1]) * 15)
 
             res.append(i_panel - i_c[start] - i_bd[bd])
 
@@ -89,6 +89,7 @@ class Module():
 
         c = self.Ns
         d = self.d
+        p = c//d
 
         #bounds for the cell
         low_bound = np.array([-10.0]*c + [-np.inf]*(c + d + d) + [0])
@@ -111,67 +112,72 @@ class Module():
         ])
 
         i = 0
+        filename = f"{test_name}_results.txt"
+        with open(filename, 'w') as f:
+            f.write(f"Detailed IV Simulation Results for: {test_name}\n")
+            f.write("="*60 + "\n\n")
 
-        #generating voltage loads to test
-        voltage_targets = np.linspace(0, self.voc, 70)
-        for voltage_target in voltage_targets:
+            #generating voltage loads to test
+            voltage_targets = np.linspace(0, self.voc, 70)
+            for voltage_target in voltage_targets:
 
-            print(f'Test number {i} at voltage {voltage_target}')
-            i+= 1
+                print(f'Test number {i} at voltage {voltage_target}')
+                i+= 1
 
-            solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
-                args=(voltage_target,))
+                solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
+                    args=(voltage_target,))
 
-            #getting the results
-            v_c = solution.x[0:c]
-            i_c = solution.x[c:2*c]
-            v_bd = solution.x[2*c:2*c+d]
-            i_bd = solution.x[2*c+d:2*c+2*d]
-            i_panel = solution.x[-1]
+                #getting the results
+                v_c = solution.x[0:c]
+                i_c = solution.x[c:2*c]
+                v_bd = solution.x[2*c:2*c+d]
+                i_bd = solution.x[2*c+d:2*c+2*d]
+                i_panel = solution.x[-1]
 
-            #adding to graphs
-            voltage = np.sum(v_c)
-            power = voltage * i_panel
+                #update the guesses if correct
+                if solution.success:
+                    x0 = solution.x
+                else:
+                    print(f"Warning: Solver failed to converge at voltage {voltage_target}")
 
-            powers.append(power)
-            voltages.append(voltage)
-            currents.append(i_panel)
+                #adding to graphs
+                voltage = np.sum(v_c)
+                power = voltage*i_panel        
+                #power = np.sum(v_c*i_c)
 
-            #update the guesses if correct
-            if solution.success:
-                x0 = solution.x
-            else:
-                print(f"Warning: Solver failed to converge at voltage {voltage_target}")
+                powers.append(power)
+                voltages.append(voltage)
+                currents.append(i_panel)
 
-        #plot
-        plt.figure()
-        plt.plot(voltages, currents)
-        plt.xlabel("Voltage (V)")
-        plt.ylabel("Current (A)")
-        plt.title("I–V Curve")
-        plt.grid(True)
-        plt.savefig(f"module_graphs/{test_name}/iv_curve.png", dpi=300, bbox_inches="tight")
-        plt.close()
+                #writing logic
 
-        # P–V
-        plt.figure()
-        plt.plot(voltages, powers)
-        plt.xlabel("Voltage (V)")
-        plt.ylabel("Power (W)")
-        plt.title("P–V Curve")
-        plt.grid(True)
-        plt.savefig(f"module_graphs/{test_name}/pv_curve.png", dpi=300, bbox_inches="tight")
-        plt.close()
+                f.write(f"--- Test {i-1} | Target Voltage: {voltage_target:.4f} V ---\n")
+                if not solution.success:
+                    f.write("*** WARNING: Solver failed to converge at this step ***\n")
+                
+                f.write(f"Total Panel Voltage : {voltage:.4f} V\n")
+                f.write(f"Total Panel Current : {i_panel:.4f} A\n")
+                f.write(f"Total Power         : {power:.4f} W\n\n")
 
-        # P–I
-        plt.figure()
-        plt.plot(currents, powers)
-        plt.xlabel("Current (A)")
-        plt.ylabel("Power (W)")
-        plt.title("P–I Curve")
-        plt.grid(True)
-        plt.savefig(f"module_graphs/{test_name}/pi_curve.png", dpi=300, bbox_inches="tight")
-        plt.close()
+                # Format numpy arrays for clean human-readable output
+                arr_opts = {'precision': 4, 'separator': ', ', 'max_line_width': 100}
+                
+                f.write("Cell Voltages (V):\n")
+                f.write(np.array2string(v_c, **arr_opts) + "\n\n")
+
+                f.write("Cell Currents (A):\n")
+                f.write(np.array2string(i_c, **arr_opts) + "\n\n")
+
+                if d > 0: # Only print diode info if bypass diodes exist
+                    f.write("Bypass Diode Voltages (V):\n")
+                    f.write(np.array2string(v_bd, **arr_opts) + "\n\n")
+
+                    f.write("Bypass Diode Currents (A):\n")
+                    f.write(np.array2string(i_bd, **arr_opts) + "\n\n")
+                
+                f.write("-" * 60 + "\n\n")
+
+        return currents, voltages, powers
 
 def testing_curves(test_name, shaded_cells, shade_level):
     os.makedirs("module_graphs", exist_ok=True)
@@ -196,14 +202,93 @@ def testing_curves(test_name, shaded_cells, shade_level):
 
     #shade the parts that need shading
     for start, end in shaded_cells:
+        print(f'Start is {start} and end is {end}')
         for i in range(start, end + 1):
             module.cell_list[i].shade(shade_level)
 
-    module.calculate_iv(test_name)
-    
+    currents, voltages, powers = module.calculate_iv(test_name)
+
+    return currents, voltages, powers 
+
+#for profiling
+import cProfile
+import pstats
+import io
+
+def run_profile():
+    pr = cProfile.Profile()
+    pr.enable()
+
+    shaded_cells = np.array([[6,11], [43,47]])
+    shade_level = 250
+    currents, voltages, powers = testing_curves('Profiling', shaded_cells, shade_level)
+
+    max_power_point = powers[np.argmax(powers)]
+
+    print(f"Max power point is {max_power_point}W")
+
+    pr.disable()
+
+    #sort values
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+    ps.print_stats(20)
+
+    print(s.getvalue())
 
 if __name__ == "__main__":
-    shaded_cells = np.array([[5,11],[42,47]])
-    shade_level = 250
-    test_name = "6-12,43-48Cell_250W"
-    testing_curves(test_name, shaded_cells, shade_level)
+    run_profile()
+
+
+#     test_name = "1-2Cell_1-2Module_100W"
+
+#     shaded_cells = np.array([])
+#     shade_level = 100
+#     currents, voltages, powers = testing_curves(test_name, shaded_cells, shade_level)
+
+#     shaded_cells = np.array([[6,11], [43,47]])
+#     shade_level = 250
+#     currents1, voltages1, powers1 = testing_curves(test_name, shaded_cells, shade_level)
+
+#     shaded_cells = np.array([[0,0], [16,16]])
+#     shade_level = 100
+#     currents2, voltages2, powers2 = testing_curves(test_name, shaded_cells, shade_level)
+
+# # I–V Curve
+#     plt.figure()
+#     plt.plot(voltages, currents, label="No Shade")
+#     plt.plot(voltages1, currents1, label="1-2 Module Shaded")
+#     plt.plot(voltages2, currents2, label="1-2 Cell Shaded)")
+#     plt.xlabel("Voltage (V)")
+#     plt.ylabel("Current (A)")
+#     plt.title("I–V Curve Comparison")
+#     plt.grid(True)
+#     plt.legend() # This adds the key to the graph
+#     plt.savefig(f"module_graphs/{test_name}/iv_curve.png", dpi=300, bbox_inches="tight")
+#     plt.close()
+
+#     # P–V Curve
+#     plt.figure()
+#     plt.plot(voltages, powers, label="No Shade")
+#     plt.plot(voltages1, powers1, label="1-2 Module Shaded")
+#     plt.plot(voltages2, powers2, label="1-2 Cell Shaded")
+#     plt.xlabel("Voltage (V)")
+#     plt.ylabel("Power (W)")
+#     plt.title("P–V Curve Comparison")
+#     plt.grid(True)
+#     plt.legend()
+#     plt.savefig(f"module_graphs/{test_name}/pv_curve.png", dpi=300, bbox_inches="tight")
+#     plt.close()
+
+#     # P–I Curve
+#     plt.figure()
+#     plt.plot(currents, powers, label="No Shade")
+#     plt.plot(currents1, powers1, label="1-2 Module Shaded")
+#     plt.plot(currents2, powers2, label="1-2 Cell Shaded")
+#     plt.xlabel("Current (A)")
+#     plt.ylabel("Power (W)")
+#     plt.title("P–I Curve Comparison")
+#     plt.grid(True)
+#     plt.legend()
+#     plt.savefig(f"module_graphs/{test_name}/pi_curve.png", dpi=300, bbox_inches="tight")
+#     plt.close()
