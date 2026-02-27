@@ -1,5 +1,5 @@
-import cell_ann
-import refactored_prediction
+from predicting_parameters import cell_ann
+from predicting_parameters import refactored_prediction
 
 import numpy as np
 from scipy.optimize import fsolve
@@ -32,7 +32,6 @@ class Cell():
     rs = None
 
     #creating ann at class level
-
     @classmethod
     def initiate_class(cls, module_name, Ns):
         cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann()
@@ -96,7 +95,11 @@ class Cell():
 
         #output of the points
         return voltages, current_targets
-    
+
+    #set the irradiance and recalculate
+    def shade(self, irr):
+        self.irradiance = irr
+        self.predict_params()
 
 #use the test conditions to generate curves for each conditions
 def plot_test_cases(test_cases):
