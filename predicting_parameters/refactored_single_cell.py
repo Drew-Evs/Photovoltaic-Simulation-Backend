@@ -99,7 +99,13 @@ class Cell():
     #set the irradiance and recalculate
     def shade(self, irr):
         self.irradiance = irr
-        self.predict_params()
+
+    #set the temperature and recalculate
+    def set_temp(self, temp):
+        self.temperature = temp
+        self.kT = temp + 273.15
+        
+
 
 #use the test conditions to generate curves for each conditions
 def plot_test_cases(test_cases):

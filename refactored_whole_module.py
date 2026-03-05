@@ -5,6 +5,9 @@ import numpy as np
 from scipy.optimize import least_squares
 import pvlib
 
+#attempt to speed up using sparse matrix
+from scipy.sparse import lil_matrix
+
 import os
 
 import random
@@ -21,6 +24,15 @@ class Module():
 
         self.d = 3
         self.num_shaded = 0
+        self.update_cell_arrays()
+
+    #need to build the arrays for calculation 
+    def update_cell_arrays(self):
+        self.rs_arr = np.array([c.rs for c in self.cell_list])
+        self.a_arr = np.array([c.a for c in self.cell_list])
+        self.isat_arr = np.array([c.isat for c in self.cell_list])
+        self.rsh_arr = np.array([c.rsh for c in self.cell_list])
+        self.iph_arr = np.array([c.iph for c in self.cell_list])
 
     def voltage_residuals(self, x, voltage_load):
         k = 1.38e-23
@@ -38,55 +50,59 @@ class Module():
         i_bd = x[2*c+d:2*c+2*d]
         i_panel = x[-1]
 
-        #stores the residuals
-        res = [] 
+        #reshape into 2D grids
+        v_c_2d = v_c.reshape((d, p))
+        i_c_2d = i_c.reshape((d, p))
 
         #eq 7 load voltage
-        res.append((np.sum(v_c) - voltage_load)*10)
+        eq7 = np.array([(np.sum(v_c) - voltage_load) * 10])
 
         #eq 8 mesh equations for each bd loop
         #the voltage in the byass diode should be opposite to that in the cells
-        for i in range(d):
-            start, end = i*p, (i+1)*p
-            res.append((v_bd[i] + np.sum(v_c[start:end]))*10)
+        eq8 = (v_bd + np.sum(v_c_2d, axis=1)) * 10
 
         #eq 9 - each cell should have the same current inside bd loops
         #and eq 10/11 current of the panel is equal to each cell plus bypass diode
-        for bd in range(d):
-            start = bd * p
-            end = (bd + 1) * p
-            for i in range(start, end - 1):
-                res.append((i_c[i] - i_c[i + 1]) * 15)
-
-            res.append(i_panel - i_c[start] - i_bd[bd])
+        eq9 = ((i_c_2d[:, :-1] - i_c_2d[:, 1:]) * 15).flatten()
 
         #eq 12 single cell current voltage relation
         #using constant values for boltzmans and electrical charge
+        eq10 = i_panel - i_c_2d[:, 0] - i_bd
+
+        # Calculate all 48 cell residuals simultaneously and add to the list
         exponent = (v_c + i_c * self.rs_arr) / self.a_arr
         exp_term = self.isat_arr * np.exp(np.clip(exponent, -50, 50))
         rsh_term = (v_c + i_c * self.rs_arr) / self.rsh_arr
-
-        # Calculate all 48 cell residuals simultaneously and add to the list
-        res.extend((-i_c + self.iph_arr - exp_term - rsh_term).tolist())
+        eq12 = -i_c + self.iph_arr - exp_term - rsh_term
 
         #eq 13 same for the bypass diodes
         #using constants for saturation current ideality and temperature
         i_sbd = 1.6e-9
-        n_bd = 1
-        t_bd = 308.5 #(kelvin)
-        for i in range(d):
-            arg_bd = np.clip((q * v_bd[i]) / (n_bd * k * t_bd), -50, 50)
-            res.append(-i_bd[i] + i_sbd * (np.exp(arg_bd) - 1))
+        t_bd = 308.5
+        arg_bd = np.clip((q * v_bd) / (1 * k * t_bd), -50, 50)
+        eq13 = -i_bd + i_sbd * (np.exp(arg_bd) - 1)
 
-        return res
+        # Combine all residuals efficiently
+        return np.concatenate([eq7, eq8, eq9, eq10, eq12, eq13])
+    
+    ##used in the MPPT to calculate an individual current for a voltage
+    def PSO_method(self, voltage, initial_guess, bounds):
+        solution = least_squares(
+                self.voltage_residuals, 
+                initial_guess, bounds=bounds,
+                args=(voltage,)
+            )
 
-    def calculate_iv(self, test_name):
-        self.rs_arr = np.array([c.rs for c in self.cell_list])
-        self.a_arr = np.array([c.a for c in self.cell_list])
-        self.isat_arr = np.array([c.isat for c in self.cell_list])
-        self.rsh_arr = np.array([c.rsh for c in self.cell_list])
-        self.iph_arr = np.array([c.iph for c in self.cell_list])
+        #calculate the power for suitability - also update the initial guess for output
+        x1 = solution.x
 
+        v_c = solution.x[0:self.Ns]
+        voltage = float(np.sum(v_c))
+        i_panel = float(solution.x[-1])
+
+        return voltage*i_panel, x1
+
+    def calculate_iv(self):
         c = self.Ns
         d = self.d
         p = c//d
@@ -112,72 +128,58 @@ class Module():
         ])
 
         i = 0
-        filename = f"{test_name}_results.txt"
-        with open(filename, 'w') as f:
-            f.write(f"Detailed IV Simulation Results for: {test_name}\n")
-            f.write("="*60 + "\n\n")
 
-            #generating voltage loads to test
-            voltage_targets = np.linspace(0, self.voc, 70)
-            for voltage_target in voltage_targets:
+        #generating voltage loads to test
+        voltage_targets = np.linspace(0, self.voc, 70)
+        for voltage_target in voltage_targets:
 
-                print(f'Test number {i} at voltage {voltage_target}')
-                i+= 1
+            #print(f'Test number {i} at voltage {voltage_target}')
+            i+= 1
 
-                solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
-                    args=(voltage_target,))
+            solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
+                args=(voltage_target,))
 
-                #getting the results
-                v_c = solution.x[0:c]
-                i_c = solution.x[c:2*c]
-                v_bd = solution.x[2*c:2*c+d]
-                i_bd = solution.x[2*c+d:2*c+2*d]
-                i_panel = solution.x[-1]
+            #getting the results
+            v_c = solution.x[0:c]
+            i_c = solution.x[c:2*c]
+            v_bd = solution.x[2*c:2*c+d]
+            i_bd = solution.x[2*c+d:2*c+2*d]
+            i_panel = solution.x[-1]
 
-                #update the guesses if correct
-                if solution.success:
-                    x0 = solution.x
-                else:
-                    print(f"Warning: Solver failed to converge at voltage {voltage_target}")
+            #update the guesses if correct
+            if solution.success:
+                x0 = solution.x
+            else:
+                print(f"Warning: Solver failed to converge at voltage {voltage_target}")
 
-                #adding to graphs
-                voltage = np.sum(v_c)
-                power = voltage*i_panel        
-                #power = np.sum(v_c*i_c)
+            #adding to graphs
+            voltage = np.sum(v_c)
+            power = voltage*i_panel        
+            #power = np.sum(v_c*i_c)
 
-                powers.append(power)
-                voltages.append(voltage)
-                currents.append(i_panel)
-
-                #writing logic
-
-                f.write(f"--- Test {i-1} | Target Voltage: {voltage_target:.4f} V ---\n")
-                if not solution.success:
-                    f.write("*** WARNING: Solver failed to converge at this step ***\n")
-                
-                f.write(f"Total Panel Voltage : {voltage:.4f} V\n")
-                f.write(f"Total Panel Current : {i_panel:.4f} A\n")
-                f.write(f"Total Power         : {power:.4f} W\n\n")
-
-                # Format numpy arrays for clean human-readable output
-                arr_opts = {'precision': 4, 'separator': ', ', 'max_line_width': 100}
-                
-                f.write("Cell Voltages (V):\n")
-                f.write(np.array2string(v_c, **arr_opts) + "\n\n")
-
-                f.write("Cell Currents (A):\n")
-                f.write(np.array2string(i_c, **arr_opts) + "\n\n")
-
-                if d > 0: # Only print diode info if bypass diodes exist
-                    f.write("Bypass Diode Voltages (V):\n")
-                    f.write(np.array2string(v_bd, **arr_opts) + "\n\n")
-
-                    f.write("Bypass Diode Currents (A):\n")
-                    f.write(np.array2string(i_bd, **arr_opts) + "\n\n")
-                
-                f.write("-" * 60 + "\n\n")
+            powers.append(power)
+            voltages.append(voltage)
+            currents.append(i_panel)
 
         return currents, voltages, powers
+    
+    #iterate through condition arrays
+    def set_cell_conditions(self, temp_array=None, irr_array=None):
+        if temp_array is None:
+            temp_array = [cell.temperature for cell in self.cell_list]
+
+        if irr_array is None:
+            irr_array = [cell.irradiance for cell in self.cell_list]
+
+        for i, (temp, irr) in enumerate(zip(temp_array, irr_array)):
+            #set cells then recalc array
+            self.cell_list[i].shade(irr)
+            self.cell_list[i].set_temp(temp)
+            self.cell_list[i].predict_params()   
+        
+        #then create the module array
+        self.update_cell_arrays()
+
 
 def testing_curves(test_name, shaded_cells, shade_level):
     os.makedirs("module_graphs", exist_ok=True)
@@ -206,6 +208,9 @@ def testing_curves(test_name, shaded_cells, shade_level):
         for i in range(start, end + 1):
             module.cell_list[i].shade(shade_level)
 
+    #update the arrays used in the least square
+    module.update_cell_arrays()
+
     currents, voltages, powers = module.calculate_iv(test_name)
 
     return currents, voltages, powers 
@@ -221,7 +226,7 @@ def run_profile():
 
     shaded_cells = np.array([[6,11], [43,47]])
     shade_level = 250
-    currents, voltages, powers = testing_curves('Profiling', shaded_cells, shade_level)
+    currents, voltages, powers = testing_curves(shaded_cells, shade_level)
 
     max_power_point = powers[np.argmax(powers)]
 
