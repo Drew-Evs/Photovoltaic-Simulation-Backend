@@ -25,7 +25,7 @@ q = 1.6e-19
 class cell():
     #initiate with a irradiance, temperature and conditions from the datasheet
     #temp in kelvin
-    def __init__(self, irr, temp, datasheet_conditions, module):
+    def __init__(self, irr, temp, datasheet_conditions, module_name):
         self.irr = irr
         self.kT = temp + 273.15
         self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
@@ -83,7 +83,6 @@ class cell():
             return res
 
         # initial guess
-        '''find out when this broke and fix'''
         x0 = [self.rs/self.Ns, self.rsh/self.Ns]
         sol = least_squares(residuals, x0, bounds=([0.001, 1],[75, 1e6]))
         self.Ns = 1
