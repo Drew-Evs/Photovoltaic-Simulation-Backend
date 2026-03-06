@@ -240,16 +240,16 @@ def test_accuracy(module):
         plt.scatter(p_voltages, p_powers, color=colors[p_idx], s=50, alpha=0.7, zorder=2)
 
     # 3. Mark the final Global Best found by the algorithm
-    plt.scatter(tracker_vmp, tracker_pmp, color='red', marker='*', s=200, label='DPSO Final MPPT', zorder=3)
+    plt.scatter(tracker_vmp, tracker_pmp, color='red', marker='*', s=200, label='SFA Final MPPT', zorder=3)
 
-    plt.title('DPSO Particles Converging on P-V Curve (Partial Shading)')
+    plt.title('SFA Particles Converging on P-V Curve (Partial Shading)')
     plt.xlabel('Voltage (V)')
     plt.ylabel('Power (W)')
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.6)
     
     # Save the file
-    filename = 'dpso_convergence.png'
+    filename = 'sfa_convergence.png'
     plt.savefig(filename, dpi=300, bbox_inches='tight')
     print(f"Convergence graph successfully saved as '{filename}'")
     plt.close()
@@ -270,10 +270,10 @@ if __name__ == "__main__":
     module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
     datasheet_conditions = (
         module['I_sc_ref'], 
-        module['V_mp_ref']*2, 
-        module['V_oc_ref']*2, 
+        module['V_mp_ref'], 
+        module['V_oc_ref'], 
         module['I_mp_ref'],
-        module['N_s']*2
+        module['N_s']
     )
 
     module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
