@@ -130,7 +130,7 @@ class Module():
         i = 0
 
         #generating voltage loads to test
-        voltage_targets = np.linspace(0, self.voc, 70)
+        voltage_targets = np.linspace(0, self.voc, 25)
         for voltage_target in voltage_targets:
 
             #print(f'Test number {i} at voltage {voltage_target}')
@@ -172,11 +172,13 @@ class Module():
             irr_array = [cell.irradiance for cell in self.cell_list]
 
         for i, (temp, irr) in enumerate(zip(temp_array, irr_array)):
-            #set cells then recalc array
-            self.cell_list[i].shade(irr)
-            self.cell_list[i].set_temp(temp)
-            self.cell_list[i].predict_params()   
-        
+            #test if change needed:
+            if temp != self.cell_list[i].temperature or irr != self.cell_list[i].irradiance:
+                #set cells then recalc array
+                self.cell_list[i].shade(irr)
+                self.cell_list[i].set_temp(temp)
+                self.cell_list[i].predict_params()   
+            
         #then create the module array
         self.update_cell_arrays()
 

@@ -45,9 +45,13 @@ class DPSO_MPPT:
         self.w = 0.3
         self.v_max = 0.05 
 
-        #whether tracking globally or locally
+        #whether tracking globally or locally p&o variables
         self.state = 'Global'
         self.po_step_size = 0.01
+        self.po_direction = 1
+        self.last_po_power = 0
+        self.last_po_pos = 0
+        self.power_drop_threshold = 0.10
 
     #use the formulas discussed to calculate min and max
     def calculate_d_min(self):
@@ -194,14 +198,38 @@ class DPSO_MPPT:
         self.particles = np.clip(self.particles, self.d_min, self.d_max)
 
     #iterate through condition arrays
-    def set_module_conditions(self, temp_array=[], irr_array=[]):
+    def set_module_conditions(self, temp_array=None, irr_array=None):
         self.module.set_cell_conditions(temp_array, irr_array)
+
+    #run solver for a single duty cycle value
+    def evaluate_single_position(self, D):
+        voltage = self.get_voltage(D)
+        
+        current_guess = self.module.isc * 0.8
+        guess = np.concatenate([
+            [voltage/self.module.Ns]*self.module.Ns, [current_guess]*self.module.Ns,
+            [0.0]*self.module.d, [0.0]*self.module.d, [current_guess]
+        ])
+
+        low_bound = np.array([-10.0]*self.module.Ns + [-np.inf]*(self.module.Ns + 2*self.module.d) + [0])
+        low_bound[self.module.Ns:2*self.module.Ns] = 0
+        high_bound = np.array([np.inf]*(2*self.module.Ns + 2*self.module.d + 1))
+        high_bound[0:self.module.Ns] = [self.module.voc_per_cell]*self.module.Ns
+        bounds = (low_bound, high_bound)
+
+        power, _ = self.module.PSO_method(voltage, guess, bounds)
+        return power
 
     #hybride tracker - tracks either globally if theres a large change in power or locally if minimal
     def track_mpp(self):
+        #want to log this in a text file
+        log_file = "power_over_time.txt"
+
         #runs the global optimisation method if in DPSO state
         if self.state == 'Global':
-            print("Large Change Detected - Running Global Tracking")
+            with open(log_file, "a") as f:
+                f.write("Large power change detected. Running Global DPSO Search\n")
+ 
             best_v, best_p, history = self.global_optimisation()
 
             #lock results into last p&o vars
@@ -209,16 +237,42 @@ class DPSO_MPPT:
             self.last_po_power = best_p
 
             #switch to P&O for future
-            self.state = 'Local'
+            #self.state = 'Local'
+            with open(log_file, "a") as f:
+                f.write(f"Global Pmp: {self.last_po_pos:.3f}, Power {self.last_po_power:.2f}W\n")
+
+            return best_v, best_p, history
 
         elif self.state == 'Local':
             #take a small step 
-            new_position = self.last_po_position + (self.po_direction*self.po_step_size)
+            new_position = self.last_po_pos + (self.po_direction*self.po_step_size)
             new_position = np.clip(new_position, self.d_min, self.d_max)
 
             #evaluate at the new position
             new_power = self.evaluate_single_position(new_position)
 
+            #prevent division by 0 and find absolute change in power
+            safe_baseline = max(self.last_po_power, 0.1) 
+            power_change_ratio = abs(new_power - safe_baseline) / safe_baseline
+
+            '''currently triggers too often at the low level need to fix'''
+            #test for a large drop (around 10%) - if so need to do global again (or also large increase)
+            if power_change_ratio > self.power_drop_threshold:
+                self.state ='Global'
+                return self.track_mpp()
+                
+            #if power goes down step in reverse direction
+            if new_power < self.last_po_power:
+                self.po_direction *= -1
+
+            #update state
+            self.last_po_power = new_power
+            self.last_po_pos = new_position
+
+            with open(log_file, "a") as f:
+                f.write(f"P&O Tracking: Pos {new_position:.3f}, Power {new_power:.2f}W\n")
+
+        return self.get_voltage(self.last_po_pos), self.last_po_power, []
 
 import random
 
@@ -369,6 +423,132 @@ def optimise_parameters(module):
     print(f"Max Velocity (v_max): {best_config[1]}")
     print(f"Best Score: {best_score:.2f}")
 
+
+def power_over_time(module):
+    #reset the simulation
+    log_file = "power_over_time.txt"
+    with open(log_file, "w", encoding="utf-8") as f:
+        f.write("--- Starting New Simulation ---\n")
+
+    tracker = DPSO_MPPT(module.d, module, 0, module.voc)
+
+    #state of simulation at start
+    total_steps = 100
+    current_shade_level = 500.0
+    target_shade_level = 500.0
+
+    shaded_cells = set()
+
+    print("Starting continuous MPPT simulation")
+    start_time = time.time()
+
+    # tracker_powers = []
+    # actual_powers = []
+
+    for step in range(total_steps):
+        #decide if big step or little step 
+        event_roll = random.random()
+
+        if event_roll < 0.1:
+            #assume a large hard shadow - clouds
+            if random.random() < 0.5:
+                current_shade_level = random.uniform(100, 400) 
+                target_shade_level = current_shade_level
+                
+                # randomly pick a large block of cells
+                block_size = random.randint(5, 20)
+                shaded_start = random.randint(0, module.Ns - block_size)
+                
+                # Overwrite the shaded_cells set with this new block
+                shaded_cells = set(range(shaded_start, shaded_start + block_size))
+                
+            # or suddenly sunny
+            else:
+                current_shade_level = 1000.0 
+                target_shade_level = 1000.0
+                
+                # Clear all shaded cells so the whole panel is in full sun
+                shaded_cells.clear()
+
+        #if not do gradual shade 
+        else:
+            #drift towards didfferent shade target
+            if abs(target_shade_level - current_shade_level) < 10:
+                target_shade_level = random.uniform(200, 1000)
+
+            current_shade_level += (target_shade_level - current_shade_level) * 0.15
+
+        #randomly 0/6 get toggled
+        num_to_toggle = random.randint(0, 6)
+        cells_to_toggle = random.sample(range(module.Ns), num_to_toggle)
+
+        #toggle if unshaded to shaded and vice versa
+        for cell in cells_to_toggle:
+            if cell in shaded_cells:
+                shaded_cells.remove(cell)
+            else:
+                shaded_cells.add(cell)
+
+        #gradual shade on cells 5 - 24
+        current_irr = np.full(module.Ns, 1000.0)
+        for cell in shaded_cells:
+            current_irr[cell] = current_shade_level
+
+        elapsed_time = time.time() - start_time
+
+        #apply to cells
+        tracker.set_module_conditions(irr_array=current_irr)
+        #module.set_cell_conditions(irr_array=current_irr)
+
+        #run the mpp
+        _, pmp, _ = tracker.track_mpp()
+        #tracker_powers.append(pmp)
+        #_, _, curve_powers = module.calculate_iv()
+        #module_pmp = curve_powers[np.argmax(curve_powers)]
+        #actual_powers.append(module_pmp)
+
+        #□ = Full Sun, ■ = Shaded
+        char_list = ["■" if i in shaded_cells else "□" for i in range(module.Ns)]
+        grid_rows = ["".join(char_list[i:i+8]) for i in range(0, module.Ns, 8)]
+        log_visual = "\n".join(grid_rows)
+
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"Time:{elapsed_time:.2f}, Irradiance:{current_shade_level:.0f}, PMP:{pmp:.2f}, State:{tracker.state}\n")
+            f.write(f"{log_visual}\n")
+            f.write("-" * 30 + "\n")
+
+        tracker.state = 'Local'
+
+        print(f"Step {step:<3}: Irr {current_shade_level:<4.0f} W/m2 | Power: {pmp:<6.2f}W | State: {tracker.state}")
+
+    print(f"\nSimulation complete! Data saved to '{log_file}'.")
+
+    # # --- NEW: Plotting the Tracker vs Actual Power ---
+    # plt.figure(figsize=(12, 6))
+    
+    # # Plot Actual Power as a dashed black baseline
+    # plt.plot(range(total_steps), actual_powers, label='Actual Absolute PMP (Full Sweep)', color='black', linestyle='--', linewidth=2, zorder=1)
+    
+    # # Plot Tracker Power as a solid blue line over top
+    # plt.plot(range(total_steps), tracker_powers, label='Hybrid Tracker Power', color='dodgerblue', linewidth=2, alpha=0.8, zorder=2)
+
+    # # Fill the area between them to highlight any tracking errors (drops/lags)
+    # plt.fill_between(range(total_steps), actual_powers, tracker_powers, color='red', alpha=0.3, label='Tracking Error / Delay')
+
+    # plt.title('Hybrid MPPT Tracker Accuracy Under Dynamic Shading')
+    # plt.xlabel('Simulation Step')
+    # plt.ylabel('Power (Watts)')
+    # plt.legend()
+    # plt.grid(True, linestyle='--', alpha=0.6)
+    
+    # # Save the plot
+    # plot_filename = 'power_tracking_comparison.png'
+    # plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    # print(f"Performance graph successfully saved as '{plot_filename}'")
+    # plt.close()
+
+
+
 if __name__ == "__main__":
     cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
     module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
@@ -384,4 +564,6 @@ if __name__ == "__main__":
     module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
     
     #optimise_parameters(module)
-    test_accuracy(module)
+    #test_accuracy(module)
+
+    power_over_time(module)
