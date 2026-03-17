@@ -61,61 +61,64 @@ def create_dataset(module_name):
     y0 = []
 
     #sees if data exists and if not generates own 
-    if os.path.exists(f"frontend_reqs/training_data/{module_name}_pv_training_data.csv"):
+    if os.path.exists(f"training_data/{module_name}_pv_training_data.csv"):
         print("Loading existing dataset...")
-        df = pd.read_csv(f"frontend_reqs/training_data/{module_name}_pv_training_data.csv")
+        df = pd.read_csv(f"training_data/{module_name}_pv_training_data.csv")
         x = df[['irr', 'temp']].values
         y = df[['iph', 'isat', 'rsh', 'a']].values
 
     #else needs to generate dataset
     else:
-        try:
-            cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-            module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
+        cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
+        module = cec_modules[module_name]
 
-            datasheet_conditions = (
-                module['I_sc_ref'], 
-                module['V_mp_ref'], 
-                module['V_oc_ref'], 
-                module['I_mp_ref'],
-                module['N_s']
-            )
+        datasheet_conditions = (
+            module['I_sc_ref'], 
+            module['V_mp_ref'], 
+            module['V_oc_ref'], 
+            module['I_mp_ref'],
+            module['N_s']
+        )
 
-            irradiances = []
-            temps = []
+        irradiances = []
+        temps = []
 
-            initial = 100
-            for i in range(22):
-                irradiances.append(initial + i*50)
+        initial = 100
+        for i in range(22):
+            irradiances.append(initial + i*50)
 
-            initial = 20
-            for i in range(14):
-                temps.append(initial + i*5)
+        initial = 20
+        for i in range(14):
+            temps.append(initial + i*5)
 
-            for irr in irradiances:
-                for temp in temps:
-                    test_cell = DataEntry(irr, temp, datasheet_conditions, module_name)
+        for irr in irradiances:
+            for temp in temps:
+                test_cell = DataEntry(irr, temp, datasheet_conditions, module_name)
 
-                    x0.append([irr, temp])
-                    y0.append([test_cell.iph, test_cell.isat, test_cell.rsh, test_cell.a])
+                x0.append([irr, temp])
+                y0.append([test_cell.iph, test_cell.isat, test_cell.rsh, test_cell.a])
 
-            x = np.array(x0)
-            y = np.array(y0)
+        x = np.array(x0)
+        y = np.array(y0)
 
-            # Combine inputs + outputs
-            data = np.hstack((x, y))
-            columns = ['irr', 'temp', 'iph', 'isat', 'rsh', 'a']
+        # Combine inputs + outputs
+        data = np.hstack((x, y))
+        columns = ['irr', 'temp', 'iph', 'isat', 'rsh', 'a']
 
-            #save to a csv file to avoid regenerating
-            df = pd.DataFrame(data, columns=columns)
-            df.to_csv(f"frontend_reqs/training_data/{module_name}_pv_training_data.csv", index=False)
-            print(f"Dataset saved to frontend_reqs/training_data/{module_name}_pv_training_data.csv")
-        except Exception as e:
-            print(f"Error - no datasheet present in pvlibs: {e}")
+        #save to a csv file to avoid regenerating
+        df = pd.DataFrame(data, columns=columns)
+        df.to_csv(f"frontend_reqs/training_data/{module_name}_pv_training_data.csv", index=False)
+        print(f"Dataset saved to frontend_reqs/training_data/{module_name}_pv_training_data.csv")
+
+    #adjust isat by log to make it better to predict
+    y[:, 1] = np.log10(y[:, 1].astype(float))
+
+    return x, y
+
 
 #returns the optimal model and scaler to adjust values
-def create_optimal_ann():
-    x, y = create_dataset()
+def create_optimal_ann(module_name):
+    x, y = create_dataset(module_name)
 
     # Scale inputs and outputs
     X_scaler = StandardScaler()
