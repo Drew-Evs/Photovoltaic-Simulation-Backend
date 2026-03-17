@@ -523,29 +523,29 @@ def power_over_time(module):
 
     print(f"\nSimulation complete! Data saved to '{log_file}'.")
 
-    # # --- NEW: Plotting the Tracker vs Actual Power ---
-    # plt.figure(figsize=(12, 6))
+    # --- NEW: Plotting the Tracker vs Actual Power ---
+    plt.figure(figsize=(12, 6))
     
-    # # Plot Actual Power as a dashed black baseline
-    # plt.plot(range(total_steps), actual_powers, label='Actual Absolute PMP (Full Sweep)', color='black', linestyle='--', linewidth=2, zorder=1)
+    # Plot Actual Power as a dashed black baseline
+    plt.plot(range(total_steps), actual_powers, label='Actual Absolute PMP (Full Sweep)', color='black', linestyle='--', linewidth=2, zorder=1)
     
-    # # Plot Tracker Power as a solid blue line over top
-    # plt.plot(range(total_steps), tracker_powers, label='Hybrid Tracker Power', color='dodgerblue', linewidth=2, alpha=0.8, zorder=2)
+    # Plot Tracker Power as a solid blue line over top
+    plt.plot(range(total_steps), tracker_powers, label='Hybrid Tracker Power', color='dodgerblue', linewidth=2, alpha=0.8, zorder=2)
 
-    # # Fill the area between them to highlight any tracking errors (drops/lags)
-    # plt.fill_between(range(total_steps), actual_powers, tracker_powers, color='red', alpha=0.3, label='Tracking Error / Delay')
+    # Fill the area between them to highlight any tracking errors (drops/lags)
+    plt.fill_between(range(total_steps), actual_powers, tracker_powers, color='red', alpha=0.3, label='Tracking Error / Delay')
 
-    # plt.title('Hybrid MPPT Tracker Accuracy Under Dynamic Shading')
-    # plt.xlabel('Simulation Step')
-    # plt.ylabel('Power (Watts)')
-    # plt.legend()
-    # plt.grid(True, linestyle='--', alpha=0.6)
+    plt.title('Hybrid MPPT Tracker Accuracy Under Dynamic Shading')
+    plt.xlabel('Simulation Step')
+    plt.ylabel('Power (Watts)')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.6)
     
-    # # Save the plot
-    # plot_filename = 'power_tracking_comparison.png'
-    # plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
-    # print(f"Performance graph successfully saved as '{plot_filename}'")
-    # plt.close()
+    # Save the plot
+    plot_filename = 'power_tracking_comparison.png'
+    plt.savefig(plot_filename, dpi=300, bbox_inches='tight')
+    print(f"Performance graph successfully saved as '{plot_filename}'")
+    plt.close()
 
 
 

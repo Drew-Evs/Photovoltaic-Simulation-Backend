@@ -15,7 +15,7 @@ class Cell():
     #creating ann at class level
     @classmethod
     def initiate_class(cls, module_name, Ns):
-        cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann()
+        cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann(module_name)
 
         #only need to get the rs everything else calculated by ann
         _, _, cls.rs, _, _, = refactored_prediction.getting_parameters(25, 1000, module_name)
