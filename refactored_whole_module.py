@@ -130,7 +130,7 @@ class Module():
         i = 0
 
         #generating voltage loads to test
-        voltage_targets = np.linspace(0, self.voc, 25)
+        voltage_targets = np.linspace(0, self.voc, 100)
         for voltage_target in voltage_targets:
 
             #print(f'Test number {i} at voltage {voltage_target}')
