@@ -66,7 +66,8 @@ class DPSO_MPPT:
 
     #used to convert from duty cycle to equivalent voltage
     def get_voltage(self, D):
-        return self.v_out*(1-D)
+        out = self.v_out*(D/(1-D))
+        return np.clip(out, 0, self.module.voc)
     
     #find the best duty cycle position
     def global_optimisation(self):
@@ -286,7 +287,7 @@ def test_accuracy(module):
     pr = cProfile.Profile()
     pr.enable()
 
-    module_tracker = DPSO_MPPT(module.d-1, module, 0, module.voc)
+    module_tracker = DPSO_MPPT(module.d, module, 0, module.voc)
     shaded_cells = np.array([[6,11], [43,47]])
     shade_level = 250
 
@@ -564,6 +565,6 @@ if __name__ == "__main__":
     module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
     
     #optimise_parameters(module)
-    #test_accuracy(module)
+    test_accuracy(module)
 
-    power_over_time(module)
+    #power_over_time(module)
