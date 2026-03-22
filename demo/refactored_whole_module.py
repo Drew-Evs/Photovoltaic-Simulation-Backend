@@ -1,26 +1,21 @@
-from predicting_parameters.refactored_single_cell import Cell
-import matplotlib.pyplot as plt
+from refactored_single_cell import Cell
 
 import numpy as np
-from scipy.optimize import least_squares
-import pvlib
-
-#attempt to speed up using sparse matrix
-from scipy.sparse import lil_matrix
-
-import os
-
-import random
+from scipy.optimize import least_squares, fsolve
 
 #a module holding a series of cells - initate all at stcs
 class Module():
-    def __init__(self, datasheet_conditions, module_name):
-        self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
+    def __init__(self, module_name, specs):
+        self.isc = specs['I_sc']
+        self.vmp = specs['V_mp']
+        self.voc = specs['V_oc']
+        self.imp = specs['I_mp']
+        self.Ns = specs['N_s']
         self.voc_per_cell = self.voc/self.Ns
         self.cell_list = []
 
         for i in range(self.Ns):
-            self.cell_list.append(Cell(1000, 25, datasheet_conditions, module_name))
+            self.cell_list.append(Cell(1000, 25, module_name, specs))
 
         self.d = 3
         self.num_shaded = 0
@@ -101,68 +96,7 @@ class Module():
         i_panel = float(solution.x[-1])
 
         return voltage*i_panel, x1
-
-    def calculate_iv(self):
-        c = self.Ns
-        d = self.d
-        p = c//d
-
-        #bounds for the cell
-        low_bound = np.array([-10.0]*c + [-np.inf]*(c + d + d) + [0])
-        low_bound[c:2*c] = 0
-        high_bound = np.array([np.inf]*(c + c + d + d + 1))
-        high_bound[0:c] = [self.voc_per_cell]*c
-
-        #returning results
-        powers = []
-        currents = []
-        voltages = []
-
-        #initial guess at short circuit
-        x0 = np.concatenate([
-            [0.0]*c,               # Cell voltages near 0
-            [self.isc]*c,          # Cell currents near short-circuit current
-            [0.0]*d,               # Bypass diode voltages
-            [0.0]*d,               # Bypass diode currents
-            [self.isc]             # Total panel current
-        ])
-
-        i = 0
-
-        #generating voltage loads to test
-        voltage_targets = np.linspace(0, self.voc, 100)
-        for voltage_target in voltage_targets:
-
-            #print(f'Test number {i} at voltage {voltage_target}')
-            i+= 1
-
-            solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
-                args=(voltage_target,))
-
-            #getting the results
-            v_c = solution.x[0:c]
-            i_c = solution.x[c:2*c]
-            v_bd = solution.x[2*c:2*c+d]
-            i_bd = solution.x[2*c+d:2*c+2*d]
-            i_panel = solution.x[-1]
-
-            #update the guesses if correct
-            if solution.success:
-                x0 = solution.x
-            else:
-                print(f"Warning: Solver failed to converge at voltage {voltage_target}")
-
-            #adding to graphs
-            voltage = np.sum(v_c)
-            power = voltage*i_panel        
-            #power = np.sum(v_c*i_c)
-
-            powers.append(power)
-            voltages.append(voltage)
-            currents.append(i_panel)
-
-        return currents, voltages, powers
-    
+      
     #iterate through condition arrays
     def set_cell_conditions(self, temp_array=None, irr_array=None):
         if temp_array is None:
@@ -181,6 +115,51 @@ class Module():
             
         #then create the module array
         self.update_cell_arrays()
+
+    def calculate_iv(self):
+        c = self.Ns
+        d = self.d
+        p = c//d
+
+        #bounds for the cell
+        low_bound = np.array([-10.0]*c + [-np.inf]*(c + d + d) + [0])
+        low_bound[c:2*c] = 0
+        high_bound = np.array([np.inf]*(c + c + d + d + 1))
+        high_bound[0:c] = [self.voc_per_cell]*c
+
+        #returning results
+        powers = []
+        voltages = []
+
+        #initial guess at short circuit
+        x0 = np.concatenate([
+            [0.0]*c,               # Cell voltages near 0
+            [self.isc]*c,          # Cell currents near short-circuit current
+            [0.0]*d,               # Bypass diode voltages
+            [0.0]*d,               # Bypass diode currents
+            [self.isc]             # Total panel current
+        ])
+
+        i = 0
+        voltage_targets = np.linspace(0, self.voc, 70)
+        for voltage_target in voltage_targets:
+
+            solution = least_squares(self.voltage_residuals, x0, bounds=(low_bound, high_bound),
+                args=(voltage_target,))
+
+            v_c = solution.x[0:c]
+            i_panel = solution.x[-1]
+            if solution.success:
+                x0 = solution.x
+            else:
+                print(f"Warning: Solver failed to converge at voltage {voltage_target}")
+
+            voltage = np.sum(v_c)
+            power = voltage*i_panel        
+            powers.append(power)
+            voltages.append(voltage)
+
+        return voltages, powers
 
     def refactored_iv(self):
         #generate a current sweep and preassign space for voltage sweep
@@ -230,121 +209,3 @@ class Module():
         I_clean = I_sys[valid]
 
         return V_clean, V_clean * I_clean
-
-
-def testing_curves(test_name, shaded_cells, shade_level):
-    os.makedirs("module_graphs", exist_ok=True)
-    os.makedirs(f'module_graphs/{test_name}', exist_ok=True)
-
-    #get the datasheet conditions
-    cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-    module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
-    module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
-    datasheet_conditions = (
-        module['I_sc_ref'], 
-        module['V_mp_ref'], 
-        module['V_oc_ref'], 
-        module['I_mp_ref'],
-        module['N_s']
-    )
-
-    #create a module & graph it
-    module = Module(datasheet_conditions, module_name)
-    flat_shaded_cells = np.array(shaded_cells).flatten()
-    module.num_shaded = len(flat_shaded_cells)
-
-    #shade the parts that need shading
-    for start, end in shaded_cells:
-        print(f'Start is {start} and end is {end}')
-        for i in range(start, end + 1):
-            module.cell_list[i].shade(shade_level)
-
-    #update the arrays used in the least square
-    module.update_cell_arrays()
-
-    currents, voltages, powers = module.calculate_iv(test_name)
-
-    return currents, voltages, powers 
-
-#for profiling
-import cProfile
-import pstats
-import io
-
-def run_profile():
-    pr = cProfile.Profile()
-    pr.enable()
-
-    shaded_cells = np.array([[6,11], [43,47]])
-    shade_level = 250
-    currents, voltages, powers = testing_curves(shaded_cells, shade_level)
-
-    max_power_point = powers[np.argmax(powers)]
-
-    print(f"Max power point is {max_power_point}W")
-
-    pr.disable()
-
-    #sort values
-    s = io.StringIO()
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
-    ps.print_stats(20)
-
-    print(s.getvalue())
-
-if __name__ == "__main__":
-    run_profile()
-
-
-#     test_name = "1-2Cell_1-2Module_100W"
-
-#     shaded_cells = np.array([])
-#     shade_level = 100
-#     currents, voltages, powers = testing_curves(test_name, shaded_cells, shade_level)
-
-#     shaded_cells = np.array([[6,11], [43,47]])
-#     shade_level = 250
-#     currents1, voltages1, powers1 = testing_curves(test_name, shaded_cells, shade_level)
-
-#     shaded_cells = np.array([[0,0], [16,16]])
-#     shade_level = 100
-#     currents2, voltages2, powers2 = testing_curves(test_name, shaded_cells, shade_level)
-
-# # I–V Curve
-#     plt.figure()
-#     plt.plot(voltages, currents, label="No Shade")
-#     plt.plot(voltages1, currents1, label="1-2 Module Shaded")
-#     plt.plot(voltages2, currents2, label="1-2 Cell Shaded)")
-#     plt.xlabel("Voltage (V)")
-#     plt.ylabel("Current (A)")
-#     plt.title("I–V Curve Comparison")
-#     plt.grid(True)
-#     plt.legend() # This adds the key to the graph
-#     plt.savefig(f"module_graphs/{test_name}/iv_curve.png", dpi=300, bbox_inches="tight")
-#     plt.close()
-
-#     # P–V Curve
-#     plt.figure()
-#     plt.plot(voltages, powers, label="No Shade")
-#     plt.plot(voltages1, powers1, label="1-2 Module Shaded")
-#     plt.plot(voltages2, powers2, label="1-2 Cell Shaded")
-#     plt.xlabel("Voltage (V)")
-#     plt.ylabel("Power (W)")
-#     plt.title("P–V Curve Comparison")
-#     plt.grid(True)
-#     plt.legend()
-#     plt.savefig(f"module_graphs/{test_name}/pv_curve.png", dpi=300, bbox_inches="tight")
-#     plt.close()
-
-#     # P–I Curve
-#     plt.figure()
-#     plt.plot(currents, powers, label="No Shade")
-#     plt.plot(currents1, powers1, label="1-2 Module Shaded")
-#     plt.plot(currents2, powers2, label="1-2 Cell Shaded")
-#     plt.xlabel("Current (A)")
-#     plt.ylabel("Power (W)")
-#     plt.title("P–I Curve Comparison")
-#     plt.grid(True)
-#     plt.legend()
-#     plt.savefig(f"module_graphs/{test_name}/pi_curve.png", dpi=300, bbox_inches="tight")
-#     plt.close()
