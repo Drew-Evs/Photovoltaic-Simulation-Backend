@@ -60,8 +60,9 @@ class DPSO_MPPT:
 
     #used to convert from duty cycle to equivalent voltage
     def get_voltage(self, D):
-        return self.v_out*(1-D)
-    
+        out = self.v_out*(D/(1-D))
+        return np.clip(out, 0, self.module.voc)
+        
     #find the best duty cycle position
     def global_optimisation(self):
         #reset for new tracking
