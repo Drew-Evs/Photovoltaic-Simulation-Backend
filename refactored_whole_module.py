@@ -182,6 +182,55 @@ class Module():
         #then create the module array
         self.update_cell_arrays()
 
+    def refactored_iv(self):
+        #generate a current sweep and preassign space for voltage sweep
+        max_iph = max([c.iph for c in self.cell_list])
+        I_sys = np.linspace(0, max_iph * 1.05, 50000) 
+        V_module = np.zeros_like(I_sys)
+
+        #split into substrings
+        c_per_d = self.Ns // self.d
+        substrings = [self.cell_list[i:i + c_per_d] for i in range(0, self.Ns, c_per_d)]
+
+        #abalanche breakdown parameters
+        VRBD = -5.5 #reverse breakdown voltag - when starts letting current flood backwards
+        #control shape of curve
+        aRBD = 1.036e-4 #avalanche fraction
+        nRBD = 3.28 #avalanch exponent
+        Vbypass = -0.5
+
+        #find the voltage of substrings pre bypass activation
+        for substr in substrings:
+            V_sub_unbypassed = np.zeros_like(I_sys)
+
+            #iterate across each substring cell calculating voltages for 
+            for cell in substr:
+                Vd_sweep = np.linspace(VRBD * 1.5, self.voc_per_cell * 1.2, 50000)
+                bishop_multiplier = 1 + aRBD * (1 - Vd_sweep / VRBD)**(-nRBD)
+
+                #explicit urrent solver
+                exponent = np.clip(Vd_sweep / cell.a, -50, 50)
+                I_cell_sweep = cell.iph - cell.isat * (np.exp(exponent) - 1) - (Vd_sweep / cell.rsh) * bishop_multiplier
+
+                #convert to cell voltage
+                V_terminal_sweep = Vd_sweep - I_cell_sweep * cell.rs
+
+                #sort so both increasing and interpolate - matching unbypassed voltage to current
+                sort_idx = np.argsort(I_cell_sweep)
+                V_cell_interp = np.interp(I_sys, I_cell_sweep[sort_idx], V_terminal_sweep[sort_idx])
+                V_sub_unbypassed += V_cell_interp
+
+            #clamp voltage to bypass diode and add to whole mdoule voltaeg
+            V_sub_bypassed = np.where(V_sub_unbypassed < Vbypass, Vbypass, V_sub_unbypassed)
+            V_module += V_sub_bypassed
+
+        #remove quadrant 1 (negaitve voltages)
+        valid = V_module >= 0
+        V_clean = V_module[valid]
+        I_clean = I_sys[valid]
+
+        return V_clean, V_clean * I_clean
+
 
 def testing_curves(test_name, shaded_cells, shade_level):
     os.makedirs("module_graphs", exist_ok=True)
