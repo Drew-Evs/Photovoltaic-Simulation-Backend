@@ -31,14 +31,13 @@ class cell():
         self.Vth = k * self.kT / q
 
         #using refactored params to calculate
-        actual_params = refactored_prediction.getting_parameters(temp, irr, module_name)
+        actual_params = predicting_parameters.refactored_prediction.getting_parameters(temp, irr, module_name)
 
         #refactor to use self.a (modified ideality factor)
         self.iph, self.isat, self.rs, self.rsh, self.a = actual_params
 
         #run all the methods to get the actual params given the conditions
         self.get_resist()
-
 
     #using i-v law to calc voltage
     def iv_equation(self, V, I):
