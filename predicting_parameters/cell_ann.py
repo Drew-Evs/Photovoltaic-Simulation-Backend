@@ -13,7 +13,7 @@ from predicting_parameters import refactored_prediction
 
 #used to build the database if needed
 class DataEntry():
-    def __init__(self, irr, temp, datasheet_conditions, specs):
+    def __init__(self, irr, temp, datasheet_conditions, module_name, specs):
         #datasheet conditions and parameter modelling
         self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
         self.voc_per_cell = self.voc/self.Ns
@@ -63,11 +63,12 @@ def create_dataset(module_name, specs):
     #generate randomly a dataset using the cell calculation
     x0 = []
     y0 = []
+    filepath = f"training_data/{module_name}_pv_training_data.csv"
 
     #sees if data exists and if not generates own 
-    if os.path.exists(f"{module_name}_pv_training_data.csv"):
+    if os.path.exists(filepath):
         print("Loading existing dataset...")
-        df = pd.read_csv(f"{module_name}_pv_training_data.csv")
+        df = pd.read_csv(filepath)
         x = df[['irr', 'temp']].values
         y = df[['iph', 'isat', 'rsh', 'a']].values
 
@@ -100,9 +101,11 @@ def create_dataset(module_name, specs):
         for i in range(11):
             irradiances.append(initial + i*100)
 
-        initial = 20
+        initial = 10
         for i in range(7):
             temps.append(initial + i*10)
+
+        count = 1
 
         for irr in irradiances:
             for temp in temps:
@@ -110,6 +113,9 @@ def create_dataset(module_name, specs):
 
                 x0.append([irr, temp])
                 y0.append([test_cell.iph, test_cell.isat, test_cell.rsh, test_cell.a])
+
+                print(f'Generated {count}')
+                count += 1
 
         x = np.array(x0)
         y = np.array(y0)
@@ -120,8 +126,8 @@ def create_dataset(module_name, specs):
 
         #save to a csv file to avoid regenerating
         df = pd.DataFrame(data, columns=columns)
-        df.to_csv(f"training_data/{module_name}_pv_training_data.csv", index=False)
-        print(f"Dataset saved to training_data/{module_name}_pv_training_data.csv")
+        df.to_csv(filepath, index=False)
+        print(f"Dataset saved to {filepath}")
 
     #adjust isat by log to make it better to predict
     y[:, 1] = np.log10(y[:, 1].astype(float))
@@ -143,7 +149,7 @@ def create_optimal_ann(module_name, specs):
     # Split
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2)
 
-    structure = tuple([33] * 2)
+    structure = tuple([12] * 2)
 
     # Create ANN
     model = MLPRegressor(
