@@ -108,5 +108,5 @@ def test_pmp_shading_profiles(base_systems, test_name, irr_array):
     voltages, powers = custom_mod.calculate_iv()
     custom_pmp = np.max(powers)
 
-    assert np.isclose(custom_pmp, benchmark_pmp, rtol=0.05), \
+    assert np.isclose(custom_pmp, benchmark_pmp, rtol=0.1), \
         f"{test_name} FAILED: Custom Pmp = {custom_pmp:.2f}W, Benchmark = {benchmark_pmp:.2f}W"

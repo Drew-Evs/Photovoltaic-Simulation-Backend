@@ -13,7 +13,7 @@ from predicting_parameters import refactored_prediction
 
 #used to build the database if needed
 class DataEntry():
-    def __init__(self, irr, temp, datasheet_conditions, module_name, specs):
+    def __init__(self, irr, temp, datasheet_conditions, specs):
         #datasheet conditions and parameter modelling
         self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
         self.voc_per_cell = self.voc/self.Ns
@@ -55,6 +55,9 @@ class DataEntry():
         sol = least_squares(residuals, x0, bounds=([0.001, 1],[75, 1e6]))
         self.Ns = 1
         self.rs, self.rsh = sol.x
+
+    def get_params(self):
+        return self.a, self.iph, self.isat, self.rs, self.rsh
 
 def create_dataset(module_name, specs):
     #generate randomly a dataset using the cell calculation
