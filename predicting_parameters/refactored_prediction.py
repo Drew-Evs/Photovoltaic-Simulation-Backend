@@ -1,14 +1,16 @@
 import numpy as np
 from scipy.optimize import root, fsolve
-from scipy.optimize import minimize
 import pvlib
+
+#ignroe progress warnings
+import warnings
+warnings.filterwarnings('ignore')
 
 #getting the guided initial guesses from the paper
 def get_initial_guesses(specs):
     # Based on Section 4.3 Empirically Guided Guess Values https://asmedigitalcollection.asme.org/solarenergyengineering/article/134/2/021011/455696/An-Improved-Coefficient-Calculator-for-the
     tech = specs['tech'].lower().strip()
     n_s = specs['N_s']
-
     
     # Table 3: Technology-specific regressions for 'a' based on technology type
     a_map = {
@@ -106,83 +108,6 @@ def cec_6_residual(x, S, specs):
     # Power slope (gamma)
     f[5] = specs['gamma'] - calculate_gamma_model(x, S, specs)
     return f
-
-#use the heuristic method discussed in the paper to fix
-def heuristic_solver(specs, t_c, S, module_name):
-    print(f"Calclculating Module {module_name}")
-    t_ref, t_curr = 298.15, t_c + 273.15
-
-    #create an initial guess
-    x0 = get_initial_guesses(specs)
-
-    #use the decreasing factors
-    factors = [1.2, 1.4, 1.6, 1.8, 2.0, 2.2]
-    module = cec_modules[module_name]
-
-    pvl_params = pvlib.pvsystem.calcparams_cec(
-        effective_irradiance = S,
-        temp_cell = t_c,
-        alpha_sc=module['alpha_sc'],
-        a_ref=module['a_ref'],
-        I_L_ref=module['I_L_ref'],
-        I_o_ref=module['I_o_ref'],
-        R_sh_ref=module['R_sh_ref'],
-        R_s=module['R_s'],
-        Adjust=module['Adjust']
-    )
-
-    pvl_array = np.array(pvl_params)
-
-    #try raw guess first 
-    result = trial(x0, pvl_array, t_c, S, specs)
-
-    if result is not False:
-        return result
-
-    #works for amorphous silicon
-    if specs['tech'] == 'Thin Film':
-        #then iterate solving each factor - then compare with pvlib
-        for f in factors:
-            guess_curr = x0.copy()
-            guess_curr[0] /= f
-
-            result = trial(guess_curr, pvl_array, t_c, S, specs)
-            if result is not False:
-                return result
-            
-        #if still not converging multiply by factors
-        for f in factors:
-            guess_curr = x0.copy()
-            guess_curr[0] *= f
-
-            result = trial(guess_curr, pvl_array, t_c, S, specs)
-            if result is not False:
-                return result
-
-
-    #heuristic for multicrystalline (poly)
-    #reduce isat and rsh
-    if specs['tech'] == 'Multi-c-Si':
-        guess_curr = x0.copy()
-        guess_curr[2] /= 100
-        guess_curr[4] /= 2
-
-        result = trial(guess_curr, pvl_array, t_c, S, specs)
-        if result is not False:
-            return result
-
-    #irrespective of technology if still not converging - increase Isc by factor of 1%
-    initial_specs = specs.copy()
-    for i in range(6):
-        multiplier = float(f'1.0{i}')
-        specs['I_sc'] = initial_specs['I_sc'] * multiplier
-
-        x_new = get_initial_guesses(specs)
-        result = trial(x_new, pvl_array, t_c, S, specs)
-        if result is not False:
-            return result
-
-    return False
 
 def trial(guess_curr, pvl_array, t_c, S, specs):
     sol = root(cec_6_residual, guess_curr, args=(1000, specs,))
@@ -309,18 +234,7 @@ def heuristic_test(sol, specs, t_c):
     if np.any(dIdV > 1e-6):
         return False
     
-    #generate open circuit point (test current 0)
-    # V = specs['V_oc'] + (specs['beta_oc'] * (25-t_c))
-    # i_guess = 0
-    # sol = fsolve(iv_equation, i_guess, args=(V,))[0]
-
-    #allow 1.5% of imp)
-    # if sol > (0.015 * specs['I_mp']):
-    #     return False
-    
-    #print("Passed solver")
     return True
-
 
 def getting_parameters(t_c, S, module_name):
     cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
@@ -343,6 +257,12 @@ def getting_parameters(t_c, S, module_name):
     out_params = np.array([params[1], params[2], params[3], params[4], params[0]])
     return out_params
 
+    
+def getting_parameters_specs(t_c, S, specs):
+    params = param_solver(specs, t_c, S)
+
+    out_params = np.array([params[1], params[2], params[3], params[4], params[0]])
+    return out_params
 
 # temp_cell = 45
 # irradiance = 500

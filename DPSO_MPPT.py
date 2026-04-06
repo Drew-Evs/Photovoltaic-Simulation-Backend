@@ -273,7 +273,7 @@ class DPSO_MPPT:
             with open(log_file, "a") as f:
                 f.write(f"P&O Tracking: Pos {new_position:.3f}, Power {new_power:.2f}W\n")
 
-        return self.get_voltage(self.last_po_pos), self.last_po_power, []
+        return self.get_voltage(self.last_po_pos), self.last_po_power, history
 
 import random
 

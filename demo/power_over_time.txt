@@ -65,3 +65,18 @@ Global Pmp: 0.200, Power 95.00W
 P&O Tracking: Pos 0.190, Power 94.76W
 Large power change detected. Running Global DPSO Search
 Global Pmp: 0.368, Power 52.40W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.200, Power 95.00W
+P&O Tracking: Pos 0.190, Power 94.76W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.368, Power 52.40W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.200, Power 95.00W
+P&O Tracking: Pos 0.190, Power 94.76W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.368, Power 52.40W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.200, Power 95.00W
+P&O Tracking: Pos 0.190, Power 94.76W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.368, Power 52.40W
