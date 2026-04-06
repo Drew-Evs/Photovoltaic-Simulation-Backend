@@ -39,14 +39,6 @@ pv_iph, pv_isat, pv_Rs, pv_Rsh, nNsVth = pvlib.pvsystem.calcparams_desoto(
 
 pv_n = nNsVth/NsVth
 
-# print(
-#     f"Iph  = {pv_iph:.4f} A\n"
-#     f"Isat = {pv_isat:.3e} A\n"
-#     f"Rs   = {pv_Rs:.4f} Ω\n"
-#     f"Rsh  = {pv_Rsh:.2f} Ω\n"
-#     f"n    = {pv_n:.3f}"
-# )
-
 
 params = (9.65, 44.3, 53.5, 9.16, 81)
 

@@ -1,6 +1,4 @@
-from predicting_parameters import reference_conditions
-from predicting_parameters import physical_params
-from predicting_parameters import refactored_prediction
+import predicting_parameters.refactored_prediction
 import numpy as np
 from scipy.optimize import fsolve, least_squares
 import os
