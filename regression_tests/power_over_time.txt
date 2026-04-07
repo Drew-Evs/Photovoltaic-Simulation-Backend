@@ -1,0 +1,32 @@
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.448, Power 320.81W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.195, Power 95.35W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.356, Power 197.13W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.449, Power 317.91W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.196, Power 94.52W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.357, Power 193.89W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.367, Power 69.12W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.470, Power 153.95W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.383, Power 175.32W
+Large power change detected. Running Global DPSO Search
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.470, Power 155.87W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.440, Power 47.22W
+Large power change detected. Running Global DPSO Search
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.448, Power 318.38W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.195, Power 94.62W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.356, Power 193.59W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.442, Power 50.15W
