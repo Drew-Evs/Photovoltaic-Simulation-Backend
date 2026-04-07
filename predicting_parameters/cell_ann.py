@@ -63,7 +63,10 @@ def create_dataset(module_name, specs):
     #generate randomly a dataset using the cell calculation
     x0 = []
     y0 = []
-    filepath = f"training_data/{module_name}_pv_training_data.csv"
+
+    #place at the absolute root
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    filepath = os.path.join(BASE_DIR, "training_data", f"{module_name}_pv_training_data.csv")
 
     #sees if data exists and if not generates own 
     if os.path.exists(filepath):
@@ -105,8 +108,6 @@ def create_dataset(module_name, specs):
         for i in range(7):
             temps.append(initial + i*10)
 
-        count = 1
-
         for irr in irradiances:
             for temp in temps:
                 test_cell = DataEntry(irr, temp, datasheet_conditions, module_name, specs)
@@ -114,15 +115,14 @@ def create_dataset(module_name, specs):
                 x0.append([irr, temp])
                 y0.append([test_cell.iph, test_cell.isat, test_cell.rsh, test_cell.a])
 
-                print(f'Generated {count}')
-                count += 1
-
         x = np.array(x0)
         y = np.array(y0)
 
         # Combine inputs + outputs
         data = np.hstack((x, y))
         columns = ['irr', 'temp', 'iph', 'isat', 'rsh', 'a']
+
+        os.makedirs(os.path.join(BASE_DIR, "training_data"), exist_ok=True)
 
         #save to a csv file to avoid regenerating
         df = pd.DataFrame(data, columns=columns)
