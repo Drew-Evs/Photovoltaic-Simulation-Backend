@@ -33,29 +33,36 @@ class Cell():
 
     #creating ann at class level
     @classmethod
-    def initiate_class(cls, module_name, Ns):
-        cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann()
+    def initiate_class(cls, module_name, Ns, specs):
+        cls.model, cls.X_scaler, cls.y_scaler =  cell_ann.create_optimal_ann(module_name, specs)
 
         #only need to get the rs everything else calculated by ann
-        _, _, cls.rs, _, _, = refactored_prediction.getting_parameters(25, 1000, module_name)
+        #if specs is not None:
+        _, _, cls.rs, _, _, = refactored_prediction.getting_parameters_specs(25, 1000, specs)
+        # else:
+        #     _, _, cls.rs, _, _, = refactored_prediction.getting_parameters(25, 1000, module_name)
         cls.rs = cls.rs/Ns
-        
 
     #initiate with a irradiance, temperature and conditions from the datasheet
     #temp in kelvin
-    def __init__(self, irr, temp, datasheet_conditions, module):
+    def __init__(self, irr, temp, module_name, specs):
         self.irradiance = irr
         self.temperature = temp
-        self.module_name = module
+        self.module_name = module_name
+
+        self.specs = specs
 
         self.kT = temp + 273.15
-        self.Vth = k * self.kT / q
 
-        self.isc, self.vmp, self.voc, self.imp, self.Ns = datasheet_conditions
+        self.isc = specs['I_sc']
+        self.vmp = specs['V_mp']
+        self.voc = specs['V_oc']
+        self.imp = specs['I_mp']
+        self.Ns = specs['N_s']
         self.voc_per_cell = self.voc/self.Ns
 
         if Cell.model is None:
-            Cell.initiate_class(self.module_name, self.Ns)
+            Cell.initiate_class(self.module_name, self.Ns, self.specs)
 
         self.predict_params()
 
@@ -79,23 +86,6 @@ class Cell():
         #reverse the logarithm
         self.isat = 10 ** log_isat
 
-    #get the curve for graphing
-    def get_curve(self):
-        max_v = 0
-        voltages = []
-
-        #using solver to calculate V from I
-        current_targets = np.linspace(0, self.iph, 200)
-        v_guess = self.voc_per_cell * 0.99
-        for I in current_targets:
-            sol = fsolve(self.iv_equation, v_guess, args=(I,))[0]
-
-            voltages.append(sol)
-            v_guess = sol
-
-        #output of the points
-        return voltages, current_targets
-
     #set the irradiance and recalculate
     def shade(self, irr):
         self.irradiance = irr
@@ -104,7 +94,9 @@ class Cell():
     def set_temp(self, temp):
         self.temperature = temp
         self.kT = temp + 273.15
-        
+
+    def get_params(self):
+        return self.a, self.iph, self.isat, Cell.rs, self.rsh
 
 
 #use the test conditions to generate curves for each conditions

@@ -1,0 +1,35 @@
+name: PV Model CI Pipeline
+
+# Will run tests when pushing to main
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Get repo code
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      # Initiate python (Fixed indentation)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: 'pip'
+
+      # Install and cache all of the dependencies required
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Run the pytests (Fixed indentation)
+      - name: Run Pytest Benchmarks
+        run: |
+          pytest -v --tb=short
