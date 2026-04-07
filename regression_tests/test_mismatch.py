@@ -47,7 +47,7 @@ TEST_CASES = [
     ("Two Substrings Lightly Shaded", irr_case_3),
     ("Two Substrings Heavily shaded", irr_case_4),
     ("Three Substrings Gradient Shade", irr_case_5),
-    ("Uniform Low Irradiance", irr_case_7)
+    ("Uniform Low Irradiance", irr_case_7),
     ("One Cell Shaded Per Substring", irr_case_8)
 ]
 
