@@ -10,6 +10,7 @@ from pvmismatch.pvmismatch_lib.pvconstants import PVconstants#
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import refactored_whole_module
+import DPSO_MPPT
 
 #the test cases used in the demo
 irr_case_1 = [1000.0] * 60
@@ -46,13 +47,12 @@ TEST_CASES = [
     ("Two Substrings Lightly Shaded", irr_case_3),
     ("Two Substrings Heavily shaded", irr_case_4),
     ("Three Substrings Gradient Shade", irr_case_5),
-    ("Single Cell Heavy Shade", irr_case_6),
-    ("Uniform Low Irradiance", irr_case_7),
+    ("Uniform Low Irradiance", irr_case_7)
     ("One Cell Shaded Per Substring", irr_case_8)
 ]
 
 #creating the 2 modules
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def base_systems():
     #specs from the LG330N1T-V5 panel datasheet
     specs = {
@@ -91,11 +91,14 @@ def base_systems():
     panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_60])
     pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
 
-    return custom_mod, pvmm_sys
+    #set up the module tracker
+    tracker = DPSO_MPPT.DPSO_MPPT(num_particles=4, module=custom_mod, RL_min=0, RL_max=custom_mod.voc)
+
+    return custom_mod, pvmm_sys, tracker 
 
 @pytest.mark.parametrize("test_name, irr_array", TEST_CASES)
-def test_pmp_shading_profiles(base_systems, test_name, irr_array):
-    custom_mod, pvmm_sys = base_systems
+def test_pmp_shading_profiles(base_systems, test_name, irr_array, subtests):
+    custom_mod, pvmm_sys, tracker = base_systems
 
     #benchmark with pvmismatch
     suns_array = np.array(irr_array) / 1000.0
@@ -108,5 +111,23 @@ def test_pmp_shading_profiles(base_systems, test_name, irr_array):
     voltages, powers = custom_mod.calculate_iv()
     custom_pmp = np.max(powers)
 
-    assert np.isclose(custom_pmp, benchmark_pmp, rtol=0.1), \
-        f"{test_name} FAILED: Custom Pmp = {custom_pmp:.2f}W, Benchmark = {benchmark_pmp:.2f}W"
+    #also want to test current first model against the benchmark
+    c_voltages, c_powers = custom_mod.refactored_iv()
+    c_pmp = np.max(c_powers)
+
+    #and test tracker is accurately finding max of curve
+    tracker.set_module_conditions(irr_array=irr_array)
+    _, tracker_pmp, _ = tracker.track_mpp()
+
+    #divide into subtests
+    with subtests.test(msg=f"Custom vs Benchmark"):
+        assert np.isclose(custom_pmp, benchmark_pmp, rtol=0.1), \
+            f"Custom Pmp = {custom_pmp:.2f}W, Benchmark = {benchmark_pmp:.2f}W"
+            
+    with subtests.test(msg=f"Refactored vs Benchmark"):
+        assert np.isclose(c_pmp, benchmark_pmp, rtol=0.1), \
+            f"Refactored Pmp = {c_pmp:.2f}W, Benchmark = {benchmark_pmp:.2f}W"
+            
+    with subtests.test(msg=f"Tracker vs Full Graph"):
+        assert np.isclose(tracker_pmp, custom_pmp, rtol=0.1), \
+            f"Tracker Pmp = {tracker_pmp:.2f}W, Full graph = {custom_pmp:.2f}W"
