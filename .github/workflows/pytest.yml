@@ -32,4 +32,4 @@ jobs:
       # Run the pytests (Fixed indentation)
       - name: Run Pytest Benchmarks
         run: |
-          pytest -v
+          pytest -v --tb=short
