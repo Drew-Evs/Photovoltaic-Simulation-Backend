@@ -2,18 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-def plot_power_data(csv_filename):
+def plot_power_data(input_csv):
     try:
-        # Load the CSV data into a Pandas DataFrame
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        target_dir = os.path.join(BASE_DIR, "simulation_data")
-
-        #ensure folder exists
-        os.makedirs(target_dir, exist_ok=True)
-
-        #finds input and output file
-        input_csv = os.path.join(target_dir, "Saved_Power_Time_Data.csv")
-
         print(f"Loading data from {input_csv}...")
         df = pd.read_csv(input_csv)
 
@@ -107,4 +97,14 @@ def plot_power_data(csv_filename):
         print(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
-    plot_power_data("Saved_Power_Time_Data.csv")
+    # Load the CSV data into a Pandas DataFrame
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    target_dir = os.path.join(BASE_DIR, "simulation_data")
+
+    #ensure folder exists
+    os.makedirs(target_dir, exist_ok=True)
+
+    #finds input and output file
+    input_csv = os.path.join(target_dir, "Saved_Power_Time_Data.csv")
+
+    plot_power_data(input_csv)
