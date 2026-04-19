@@ -36,7 +36,7 @@ To gather a day of data:
 python frontend_reqs/data_harvester.py
 ```
 
-Press play on the unity model to run the simulator and gather the shade data \
+Press play on the unity model to run the simulator and gather the shade data 
 
 If gathered a day of data can run:
 ```bash
@@ -59,8 +59,6 @@ Shows the steps:
 Graphical model day/night cycle:
 ![Solar GIF](results/shading_data/shadinganimation.gif)
 
-| Graphical Image | Results |
-| :--- | :--- |
 | Graphical Image | Results |
 | :--- | :--- |
 | ![](results/shading_data/panel1.png) | ![](results/dashboards/d1.png) |
