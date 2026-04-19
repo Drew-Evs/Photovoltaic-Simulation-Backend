@@ -223,13 +223,14 @@ class DPSO_MPPT:
 
     #hybride tracker - tracks either globally if theres a large change in power or locally if minimal
     def track_mpp(self):
+        #taking out logs
         #want to log this in a text file
-        log_file = "power_over_time.txt"
+        #log_file = "power_over_time.txt"
 
         #runs the global optimisation method if in DPSO state
         if self.state == 'Global':
-            with open(log_file, "a") as f:
-                f.write("Large power change detected. Running Global DPSO Search\n")
+            # with open(log_file, "a") as f:
+            #     f.write("Large power change detected. Running Global DPSO Search\n")
  
             best_v, best_p, history = self.global_optimisation()
 
@@ -239,8 +240,8 @@ class DPSO_MPPT:
 
             #switch to P&O for future
             #self.state = 'Local'
-            with open(log_file, "a") as f:
-                f.write(f"Global Pmp: {self.last_po_pos:.3f}, Power {self.last_po_power:.2f}W\n")
+            # with open(log_file, "a") as f:
+            #     f.write(f"Global Pmp: {self.last_po_pos:.3f}, Power {self.last_po_power:.2f}W\n")
 
             return best_v, best_p, history
 
@@ -270,8 +271,8 @@ class DPSO_MPPT:
             self.last_po_power = new_power
             self.last_po_pos = new_position
 
-            with open(log_file, "a") as f:
-                f.write(f"P&O Tracking: Pos {new_position:.3f}, Power {new_power:.2f}W\n")
+            # with open(log_file, "a") as f:
+            #     f.write(f"P&O Tracking: Pos {new_position:.3f}, Power {new_power:.2f}W\n")
 
         return self.get_voltage(self.last_po_pos), self.last_po_power, history
 
