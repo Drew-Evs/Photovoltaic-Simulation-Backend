@@ -56,6 +56,10 @@ def run_shade_to_pmp_new(module, input_csv, output_csv):
         if avg_irr > 0:
             module.set_cell_conditions(irr_array=row)
             voltages, powers = module.refactored_iv()
+            try:
+                pmp = np.max(powers)
+            except:
+                pmp = 0
         else:
             pmp = 0
         
@@ -63,9 +67,9 @@ def run_shade_to_pmp_new(module, input_csv, output_csv):
         
         #calculate the time (based on 450 items meaning 24 hours)
         elapsed_time = 192*i
-        print(f'Step {i}')
+        print(f'step {i}')
 
-        output.append({"time": elapsed_time, "power": np.max(powers), "shaded_substrings": shaded_subs})
+        output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
 
     df = pd.DataFrame(output)
     df.to_csv(output_csv, index=False)
