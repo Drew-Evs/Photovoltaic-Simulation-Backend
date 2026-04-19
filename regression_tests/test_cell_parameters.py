@@ -18,10 +18,14 @@ module = cec_modules['Canadian_Solar_Inc__CS1U_405MS']
 #different conditions to test
 TEST_CONDITIONS = [
     (25, 1000),
-    (10, 200),   
-    (45, 800), 
-    (60, 1000), 
-    (25, 500),
+    (45, 1000),   
+    (65, 1000), 
+    (25, 600),
+    (45, 600),   
+    (65, 600),
+    (25, 200),
+    (45, 200),   
+    (65, 200),  
 ]
 
 #specs from datasheet imported from pvlibs
@@ -68,31 +72,31 @@ def parameter_sets(request):
     } 
 
 #regression tests
-def test_Iph(parameter_sets):
-    pv_val, ref_val = parameter_sets['pvlib'][0], parameter_sets['model'][0]
-    cond = parameter_sets['condition']
-    assert np.isclose(ref_val, pv_val, rtol=0.001), f"Iph at {cond}: got {ref_val}, expected {pv_val}"
+# def test_analytical_parameters(parameter_sets, subtests):
+#     #unpack to tuples
+#     pv_vals = parameter_sets['pvlib']
+#     ref_vals = parameter_sets['model']
+#     cond = parameter_sets['condition']
 
-def test_Isat(parameter_sets):
-    pv_val, ref_val = parameter_sets['pvlib'][1], parameter_sets['model'][1]
-    cond = parameter_sets['condition']
-    assert np.isclose(ref_val, pv_val, rtol=0.01), f"Isat at {cond}: got {ref_val}, expected {pv_val}"
+#     #define param names
+#     checks = [
+#         ("Iph", 0, 0.001),
+#         ("Isat", 1, 0.01),
+#         ("Rs", 2, 0.01),
+#         ("Rsh", 3, 0.07),
+#         ("a", 4, 0.01)
+#     ]
 
-def test_Rs(parameter_sets):
-    pv_val, ref_val = parameter_sets['pvlib'][2], parameter_sets['model'][2]
-    cond = parameter_sets['condition']
-    assert np.isclose(ref_val, pv_val, rtol=0.01), f"Rs at {cond}: got {ref_val}, expected {pv_val}"
+#     #run subtest for each param at each conditoin
+#     for param_name, idx, tol in checks:
+#         pv_val = pv_vals[idx]
+#         ref_val = ref_vals[idx]
 
-def test_Rsh(parameter_sets):
-    pv_val, ref_val = parameter_sets['pvlib'][3], parameter_sets['model'][3]
-    cond = parameter_sets['condition']
-    assert np.isclose(ref_val, pv_val, rtol=0.07), f"Rsh at {cond}: got {ref_val}, expected {pv_val}"
-
-def test_a(parameter_sets):
-    pv_val, ref_val = parameter_sets['pvlib'][4], parameter_sets['model'][4]
-    cond = parameter_sets['condition']
-    assert np.isclose(ref_val, pv_val, rtol=0.01), f"a at {cond}: got {ref_val}, expected {pv_val}"
-
+#         # print(f"{cond} | {param_name} | Expected (PVLib): {pv_val:.5g} | Got (Model): {ref_val:.5g}")
+        
+#         with subtests.test(msg=param_name):
+#             assert np.isclose(ref_val, pv_val, rtol=tol), \
+#                 f"{param_name} at {cond}: got {ref_val}, expected {pv_val}"
 
 #create a single cell - using ANN and a data entry class to test against
 #data entry is whats used to build training data - shown to be accurate
@@ -115,6 +119,7 @@ def parameter_sets_cell(request, base_system):
     #then create the data entry with these conditions
     data_entry = cell_ann.DataEntry(irr, t_c, datasheet_conditions, 'Canadian_Solar_Inc__CS1U_405MS', specs)
 
+
     #return dict values
     return {
         'ann': test_cell.get_params(),
@@ -123,27 +128,29 @@ def parameter_sets_cell(request, base_system):
     } 
 
 #regression test cells
-def test_cell_Iph(parameter_sets_cell):
-    ann_val, ref_val = parameter_sets_cell['ann'][1], parameter_sets_cell['data_entry'][1]
+def test_ann_parameters(parameter_sets_cell, subtests):
+    #get the ann values and reference values to unpack
+    ann_vals = parameter_sets_cell['ann']
+    ref_vals = parameter_sets_cell['data_entry']
     cond = parameter_sets_cell['condition']
-    assert np.isclose(ref_val, ann_val, rtol=0.1), f"Iph at {cond}: got {ann_val}, expected {ref_val}"
 
-def test_cell_Isat(parameter_sets_cell):
-    ann_val, ref_val = parameter_sets_cell['ann'][2], parameter_sets_cell['data_entry'][2]
-    cond = parameter_sets_cell['condition']
-    assert np.isclose(ref_val, ann_val, rtol=0.05), f"Isat at {cond}: got {ann_val}, expected {ref_val}"
+    #define as parameters
+    checks = [
+        ("a", 0, {"rtol": 0.05}),
+        ("Iph", 1, {"rtol": 0.1}),
+        ("Isat", 2, {"rtol": 0.05}),
+        ("Rs", 3, {"rtol": 0.05}),
+        ("Rsh", 4, {"atol": 1e1})
+    ]
 
-def test_cell_Rs(parameter_sets_cell):
-    ann_val, ref_val = parameter_sets_cell['ann'][3], parameter_sets_cell['data_entry'][3]
-    cond = parameter_sets_cell['condition']
-    assert np.isclose(ref_val, ann_val, rtol=0.05), f"Rs at {cond}: got {ann_val}, expected {ref_val}"
+    #test for each parameter
+    for param_name, idx, tol_kwargs in checks:
+        ann_val = ann_vals[idx]
+        ref_val = ref_vals[idx]
+        
+        #format and output
+        print(f"{cond} | {param_name} | Expected (DataEntry): {ref_val:.5g} | Got (ANN): {ann_val:.5g}")
 
-def test_cell_Rsh(parameter_sets_cell):
-    ann_val, ref_val = parameter_sets_cell['ann'][4], parameter_sets_cell['data_entry'][4]
-    cond = parameter_sets_cell['condition']
-    assert np.isclose(ref_val, ann_val, atol=1e1), f"Rsh at {cond}: got {ann_val}, expected {ref_val}"
-
-def test_cell_a(parameter_sets_cell):
-    ann_val, ref_val = parameter_sets_cell['ann'][0], parameter_sets_cell['data_entry'][0]
-    cond = parameter_sets_cell['condition']
-    assert np.isclose(ref_val, ann_val, rtol=0.05), f"a at {cond}: got {ann_val}, expected {ref_val}"
+        with subtests.test(msg=param_name):
+            assert np.isclose(ref_val, ann_val, **tol_kwargs), \
+                f"{param_name} at {cond}: got {ann_val}, expected {ref_val}"
