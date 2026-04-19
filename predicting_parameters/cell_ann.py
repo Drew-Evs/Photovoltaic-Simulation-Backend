@@ -101,8 +101,8 @@ def create_dataset(module_name, specs):
         temps = []
 
         initial = 100
-        for i in range(11):
-            irradiances.append(initial + i*100)
+        for i in range(22):
+            irradiances.append(initial + i*50)
 
         initial = 10
         for i in range(7):
@@ -149,7 +149,7 @@ def create_optimal_ann(module_name, specs):
     # Split
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2)
 
-    structure = tuple([12] * 2)
+    structure = tuple([33] * 2)
 
     # Create ANN
     model = MLPRegressor(

@@ -95,7 +95,8 @@ def pvmismatch_test(module, module_pvmm):
         #keep tracker working
         avg_irr = np.mean(row)
         if avg_irr > 0.0:
-            suns_array = np.array(row) / 1000.0
+            raw_suns = np.array(row) / 1000.0
+            suns_array = np.clip(raw_suns, 0.001, None)
             module_pvmm.setSuns(suns_array)
             _, _, Pmod, _, _ = module_pvmm.calcMod()
             P_pvmm = Pmod.flatten()
@@ -140,6 +141,9 @@ if __name__ == "__main__":
     )
     module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
 
+    #run_shade_to_pmp_new(module)
+
+    #create the pvmismatch version
     custom_const = PVconstants()
     a, iph, isat, rs, rsh = module.cell_list[0].get_params()
     T = 298.15 
@@ -148,11 +152,13 @@ if __name__ == "__main__":
     custom_const.k = custom_const.k * n_ideal
 
     lg_cells = [
-        pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const) 
+        pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=datasheet_conditions[0]) 
         for _ in range(48)
     ]
 
-    custom_layout = pvmodule.standard_cellpos_pat(nrows=16, ncols_per_substr=[1, 1, 1])
+    custom_layout = pvmodule.standard_cellpos_pat(nrows=8, ncols_per_substr=[2, 2, 2])
     panel_48 = pvmodule.PVmodule(cell_pos=custom_layout, pvcells=lg_cells)
+    panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_48])
+    pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
 
-    pvmismatch_test(module, panel_48)
+    pvmismatch_test(module, pvmm_sys)

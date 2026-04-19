@@ -66,3 +66,6 @@ class Cell():
     def set_temp(self, temp):
         self.temperature = temp
         self.kT = temp + 273.15
+
+    def get_params(self):
+        return self.a, self.iph, self.isat, Cell.rs, self.rsh
