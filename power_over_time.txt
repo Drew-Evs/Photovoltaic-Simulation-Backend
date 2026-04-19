@@ -1,0 +1,6 @@
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.345, Power 107.83W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.345, Power 107.39W
+Large power change detected. Running Global DPSO Search
+Global Pmp: 0.346, Power 107.68W

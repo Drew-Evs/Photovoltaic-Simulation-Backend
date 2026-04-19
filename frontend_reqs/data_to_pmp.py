@@ -5,19 +5,19 @@ import select
 import pandas as pd
 
 import pvlib
-from refactored_whole_module import Module
+import sys
+import os
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from power_tracking.refactored_whole_module import Module
+from power_tracking.DPSO_MPPT import DPSO_MPPT
 
-from DPSO_MPPT import DPSO_MPPT
-
-def run_shade_to_pmp(module):
+def run_shade_to_pmp(module, input_csv, output_csv):
     #create the tracker
     tracker =  DPSO_MPPT(module.d, module, 0, module.voc)
     tracker.state = 'Global'
 
-    data = pd.read_csv("Saved_Irradiance_Data.csv")
-    log_file = "unity_power_log.txt"
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write("Step, Time, Unity Avg Irradiance, Power(W), Tracker State, Shaded Substrings\n")
+    data = pd.read_csv(input_csv)
 
     output = []
 
@@ -37,22 +37,15 @@ def run_shade_to_pmp(module):
         #calculate the time (based on 450 items meaning 24 hours)
         elapsed_time = 192*i
 
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"{i}, {elapsed_time:.2f}, {avg_irr:.0f}, {pmp:.2f}, {tracker.state}, {shaded_subs}\n")
-
         output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
         tracker.state = 'Local'
 
     df = pd.DataFrame(output)
-    df.to_csv("Saved_Power_Time_Data2.csv", index=False)
+    df.to_csv(output_csv, index=False)
 
 #new model just using module
-def run_shade_to_pmp_new(module):
-    data = pd.read_csv("Saved_Irradiance_Data.csv")
-    log_file = "unity_power_log.txt"
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write("Step, Time, Unity Avg Irradiance, Power(W), Shaded Substrings\n")
-
+def run_shade_to_pmp_new(module, input_csv, output_csv):
+    data = pd.read_csv(input_csv)
     output = []
 
     #get irradiance list
@@ -62,7 +55,7 @@ def run_shade_to_pmp_new(module):
         avg_irr = np.mean(row)
         if avg_irr > 0:
             module.set_cell_conditions(irr_array=row)
-            pmp = module.refactored_iv()
+            voltages, powers = module.refactored_iv()
         else:
             pmp = 0
         
@@ -70,23 +63,16 @@ def run_shade_to_pmp_new(module):
         
         #calculate the time (based on 450 items meaning 24 hours)
         elapsed_time = 192*i
+        print(f'Step {i}')
 
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"{i}, {elapsed_time:.2f}, {avg_irr:.0f}, {pmp:.2f}, {shaded_subs}\n")
-
-        output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
-
+        output.append({"time": elapsed_time, "power": np.max(powers), "shaded_substrings": shaded_subs})
 
     df = pd.DataFrame(output)
-    df.to_csv("Saved_Power_Time_Data2.csv", index=False)
+    df.to_csv(output_csv, index=False)
 
 #trial run using the pvmismatch library to test
-def pvmismatch_test(module, module_pvmm):
-    data = pd.read_csv("Saved_Irradiance_Data.csv")
-    log_file = "unity_power_log.txt"
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write("Step, Time, Unity Avg Irradiance, Power(W), Shaded Substrings\n")
-
+def pvmismatch_test(module, module_pvmm, input_csv, output_csv):
+    data = pd.read_csv(input_csv)
     output = []
 
     #get irradiance list
@@ -114,14 +100,10 @@ def pvmismatch_test(module, module_pvmm):
         #calculate the time (based on 450 items meaning 24 hours)
         elapsed_time = 192*i
 
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"{i}, {elapsed_time:.2f}, {avg_irr:.0f}, {pmp:.2f}, {shaded_subs}\n")
-
         output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
 
-
     df = pd.DataFrame(output)
-    df.to_csv("Saved_Power_Time_Data2.csv", index=False)
+    df.to_csv(output_csv, index=False)
 
 
 if __name__ == "__main__":
@@ -129,36 +111,56 @@ if __name__ == "__main__":
     from pvmismatch.pvmismatch_lib import pvmodule, pvstring, pvcell
     from pvmismatch.pvmismatch_lib.pvconstants import PVconstants
 
-    cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-    module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
-    module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
-    datasheet_conditions = (
-        module['I_sc_ref'], 
-        module['V_mp_ref'], 
-        module['V_oc_ref'], 
-        module['I_mp_ref'],
-        module['N_s']
-    )
-    module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+    #hold data in a folder
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    target_dir = os.path.join(BASE_DIR, "simulation_data")
 
-    #run_shade_to_pmp_new(module)
+    #ensure folder exists
+    os.makedirs(target_dir, exist_ok=True)
 
-    #create the pvmismatch version
-    custom_const = PVconstants()
-    a, iph, isat, rs, rsh = module.cell_list[0].get_params()
-    T = 298.15 
-    Vt_standard = (custom_const.k * T) / custom_const.q
-    n_ideal = a / Vt_standard
-    custom_const.k = custom_const.k * n_ideal
+    #finds input and output file
+    input_csv = os.path.join(target_dir, "Saved_Irradiance_Data.csv")
+    output_csv = os.path.join(target_dir, "Saved_Power_Time_Data.csv")
 
-    lg_cells = [
-        pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=datasheet_conditions[0]) 
-        for _ in range(48)
-    ]
+    #ensures input exists
+    if not os.path.exists(input_csv):
+        print(f"Error: Input data not found at {input_csv}")
+    else:
+        cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
+        module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
+        module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
+        specs = {
+            'tech': module['Technology'],
+            'N_s': module['N_s'],
+            'I_sc': module['I_sc_ref'],
+            'V_oc': module['V_oc_ref'],
+            'I_mp': module['I_mp_ref'],
+            'V_mp': module['V_mp_ref'],
+            'alpha_sc': module['alpha_sc'],
+            'beta_oc': module['beta_oc'],
+            'gamma': module['gamma_r']/100
+        }
+        
+        module = Module('Prism_Solar_Technologies_Bi48_267BSTC', specs)
 
-    custom_layout = pvmodule.standard_cellpos_pat(nrows=8, ncols_per_substr=[2, 2, 2])
-    panel_48 = pvmodule.PVmodule(cell_pos=custom_layout, pvcells=lg_cells)
-    panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_48])
-    pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
+        run_shade_to_pmp_new(module, input_csv, output_csv)
 
-    pvmismatch_test(module, pvmm_sys)
+        # #create the pvmismatch version
+        # custom_const = PVconstants()
+        # a, iph, isat, rs, rsh = module.cell_list[0].get_params()
+        # T = 298.15 
+        # Vt_standard = (custom_const.k * T) / custom_const.q
+        # n_ideal = a / Vt_standard
+        # custom_const.k = custom_const.k * n_ideal
+
+        # lg_cells = [
+        #     pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=specs['I_sc']) 
+        #     for _ in range(48)
+        # ]
+
+        # custom_layout = pvmodule.standard_cellpos_pat(nrows=8, ncols_per_substr=[2, 2, 2])
+        # panel_48 = pvmodule.PVmodule(cell_pos=custom_layout, pvcells=lg_cells)
+        # panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_48])
+        # pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
+
+        # pvmismatch_test(module, pvmm_sys, input_csv, output_csv)
