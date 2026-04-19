@@ -265,31 +265,31 @@ def testing_curves(test_name, shaded_cells, shade_level):
 
     return currents, voltages, powers 
 
-#for profiling
-import cProfile
-import pstats
-import io
+# #for profiling
+# import cProfile
+# import pstats
+# import io
 
-def run_profile():
-    pr = cProfile.Profile()
-    pr.enable()
+# def run_profile():
+#     pr = cProfile.Profile()
+#     pr.enable()
 
-    shaded_cells = np.array([[6,11], [43,47]])
-    shade_level = 250
-    currents, voltages, powers = testing_curves(shaded_cells, shade_level)
+#     shaded_cells = np.array([[6,11], [43,47]])
+#     shade_level = 250
+#     currents, voltages, powers = testing_curves(shaded_cells, shade_level)
 
-    max_power_point = powers[np.argmax(powers)]
+#     max_power_point = powers[np.argmax(powers)]
 
-    print(f"Max power point is {max_power_point}W")
+#     print(f"Max power point is {max_power_point}W")
 
-    pr.disable()
+#     pr.disable()
 
-    #sort values
-    s = io.StringIO()
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
-    ps.print_stats(20)
+#     #sort values
+#     s = io.StringIO()
+#     ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+#     ps.print_stats(20)
 
-    print(s.getvalue())
+#     print(s.getvalue())
 
 # if __name__ == "__main__":
 #     run_profile()

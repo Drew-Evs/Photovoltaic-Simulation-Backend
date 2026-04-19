@@ -275,14 +275,7 @@ class DPSO_MPPT:
             #     f.write(f"P&O Tracking: Pos {new_position:.3f}, Power {new_power:.2f}W\n")
 
         return self.get_voltage(self.last_po_pos), self.last_po_power, history
-
-import random
-
-#for profiling
-import cProfile
-import pstats
-import io
-
+    
 #testing accuracy and performance against the full loop
 def test_accuracy(module):
     pr = cProfile.Profile()
@@ -354,9 +347,6 @@ def test_accuracy(module):
     ps.print_stats(20)
 
     print(s.getvalue())
-    
-import itertools
-import time
 
 # find the optimal parameters for the model
 def optimise_parameters(module):
@@ -552,6 +542,17 @@ def power_over_time(module):
 
 
 if __name__ == "__main__":
+    
+    import random
+
+    #for profiling
+    import cProfile
+    import pstats
+    import io
+            
+    import itertools
+    import time
+
     cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
     module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
     module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
