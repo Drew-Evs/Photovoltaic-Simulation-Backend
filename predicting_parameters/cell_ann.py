@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import pvlib
 import numpy as np
+from pathlib import Path
 
 from scipy.optimize import fsolve, least_squares
 
@@ -64,10 +65,12 @@ def create_dataset(module_name, specs):
     x0 = []
     y0 = []
 
-    #place at the absolute root
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    filepath = os.path.join(BASE_DIR, "training_data", f"{module_name}_pv_training_data.csv")
-
+    #save at absolute root
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent 
+    target_dir = PROJECT_ROOT / "training_data"
+    os.makedirs(target_dir, exist_ok=True)
+    filepath = target_dir / f"{module_name}_pv_training_data.csv"
+    
     #sees if data exists and if not generates own 
     if os.path.exists(filepath):
         print("Loading existing dataset...")
@@ -76,19 +79,7 @@ def create_dataset(module_name, specs):
         y = df[['iph', 'isat', 'rsh', 'a']].values
 
     #else needs to generate dataset
-    else:
-        # cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
-        # module = cec_modules[module_name]
-
-        # datasheet_conditions = (
-        #     module['I_sc_ref'], 
-        #     module['V_mp_ref'], 
-        #     module['V_oc_ref'], 
-        #     module['I_mp_ref'],
-        #     module['N_s']
-        # )
-
-        
+    else:        
         isc = specs['I_sc']
         vmp = specs['V_mp']
         voc = specs['V_oc']
@@ -101,8 +92,8 @@ def create_dataset(module_name, specs):
         temps = []
 
         initial = 100
-        for i in range(11):
-            irradiances.append(initial + i*100)
+        for i in range(22):
+            irradiances.append(initial + i*50)
 
         initial = 10
         for i in range(7):
@@ -149,7 +140,7 @@ def create_optimal_ann(module_name, specs):
     # Split
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y_scaled, test_size=0.2)
 
-    structure = tuple([12] * 2)
+    structure = tuple([33] * 2)
 
     # Create ANN
     model = MLPRegressor(
