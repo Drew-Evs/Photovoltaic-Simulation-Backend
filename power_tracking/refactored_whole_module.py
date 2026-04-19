@@ -213,6 +213,22 @@ class Module():
         I_clean = I_sys[valid]
 
         return V_clean, V_clean * I_clean
+    
+    #need a method to ifnd the number of shaded substrings
+    def count_shaded_substrings(self, irr_array):
+        #get highest irr value on panel and cells per substring
+        max_irr = np.max(irr_array)
+        cells_per_substring = self.Ns // self.d
+        reshaped_irr = np.array(irr_array).reshape((self.d, cells_per_substring))
+
+        #test if a cell is shaded
+        is_cell_shaded = reshaped_irr < (max_irr - 75)
+
+        #count number of shaded substrings
+        is_substring_shaded = np.any(is_cell_shaded, axis=1)
+        num_shaded_substrings = np.sum(is_substring_shaded)
+
+        return num_shaded_substrings    
 
 
 def testing_curves(test_name, shaded_cells, shade_level):

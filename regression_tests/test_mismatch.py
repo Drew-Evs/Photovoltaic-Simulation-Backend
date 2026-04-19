@@ -9,8 +9,8 @@ from pvmismatch.pvmismatch_lib import pvmodule, pvstring, pvcell
 from pvmismatch.pvmismatch_lib.pvconstants import PVconstants#
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-import refactored_whole_module
-import DPSO_MPPT
+import power_tracking.refactored_whole_module as refactored_whole_module
+import power_tracking.DPSO_MPPT as DPSO_MPPT
 
 #the test cases used in the demo
 irr_case_1 = [1000.0] * 60

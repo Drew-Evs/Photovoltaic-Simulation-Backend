@@ -1,4 +1,4 @@
-from refactored_whole_module import Module
+from power_tracking.refactored_whole_module import Module
 import numpy as np
 import pvlib
 

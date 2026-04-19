@@ -10,8 +10,11 @@ from pvmismatch.pvmismatch_lib.pvconstants import PVconstants
 
 #for generating own panel
 import pvlib
-from refactored_whole_module import Module
-from DPSO_MPPT import DPSO_MPPT
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from power_tracking.refactored_whole_module import Module
+from power_tracking.DPSO_MPPT import DPSO_MPPT
 
 #generate a dashboard with results 
 def build_figure(mismatch_panel, tracker, module, irr_list):
@@ -60,7 +63,7 @@ def build_figure(mismatch_panel, tracker, module, irr_list):
 
     #calculate iv 
     original_v, original_p = module.calculate_iv()
-    track_v, track_p = tracker.track_mpp()
+    track_v, track_p, _ = tracker.track_mpp()
 
     #generate curves and mppt point
     axs[1, 0].set_title(f'Implicit Model Output & MPPT {track_p:.3f}W')
@@ -124,14 +127,19 @@ if __name__ == "__main__":
     cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
     module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
     module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
-    datasheet_conditions = (
-        module['I_sc_ref'], 
-        module['V_mp_ref'], 
-        module['V_oc_ref'], 
-        module['I_mp_ref'],
-        module['N_s']
-    )
-    module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+    specs = {
+        'tech': module['Technology'],
+        'N_s': module['N_s'],
+        'I_sc': module['I_sc_ref'],
+        'V_oc': module['V_oc_ref'],
+        'I_mp': module['I_mp_ref'],
+        'V_mp': module['V_mp_ref'],
+        'alpha_sc': module['alpha_sc'],
+        'beta_oc': module['beta_oc'],
+        'gamma': module['gamma_r']/100
+    }
+    
+    module = Module('Prism_Solar_Technologies_Bi48_267BSTC', specs)
 
     #create the mppt tracker
     tracker = DPSO_MPPT(module.d, module, 0, module.voc)
@@ -145,7 +153,7 @@ if __name__ == "__main__":
     custom_const.k = custom_const.k * n_ideal
 
     lg_cells = [
-        pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=datasheet_conditions[0]) 
+        pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=specs['I_sc']) 
         for _ in range(48)
     ]
 
