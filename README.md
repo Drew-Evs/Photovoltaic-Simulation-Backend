@@ -24,7 +24,7 @@ Ensure you have Python 3.9+ installed. Install the required dependencies using p
 ```bash
 pip install -r requirements.txt
 ```
-Unzip the 3Dmodel folder to run the model using unity \
+Unzip the 3Dmodel folder to run the model using unity 
 
 To gather a snapshot:
 ```bash
@@ -47,7 +47,7 @@ To generate the day snapshot data
 
 
 ## Demo
-Run the demo.ipynb file for more information on the process \
+Run the demo.ipynb file for more information on the process 
 Shows the steps:
 1. Module parameter prediction
 2. Cell parameter prediction and ANN
@@ -61,9 +61,11 @@ Graphical model day/night cycle:
 
 | Graphical Image | Results |
 | :--- | :--- |
-|![results/shading_data/panel1.png] | ![results/dashboards/d1.png] |
-|![results/shading_data/panel2.png] | ![results/dashboards/d2.png] |
-|![results/shading_data/panel3.png] | ![results/dashboards/d3.png] |
-|![results/shading_data/panel4.png] | ![results/dashboards/d4.png] |
-|![results/shading_data/panel5.png] | ![results/dashboards/d5.png] |
-|![results/shading_data/panel6.png] | ![results/dashboards/d6.png] |
+| Graphical Image | Results |
+| :--- | :--- |
+| ![](results/shading_data/panel1.png) | ![](results/dashboards/d1.png) |
+| ![](results/shading_data/panel2.png) | ![](results/dashboards/d2.png) |
+| ![](results/shading_data/panel3.png) | ![](results/dashboards/d3.png) |
+| ![](results/shading_data/panel4.png) | ![](results/dashboards/d4.png) |
+| ![](results/shading_data/panel5.png) | ![](results/dashboards/d5.png) |
+| ![](results/shading_data/panel6.png) | ![](results/dashboards/d6.png) |
