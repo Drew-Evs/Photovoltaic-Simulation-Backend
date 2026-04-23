@@ -113,7 +113,7 @@ def create_dataset(module_name, specs):
         data = np.hstack((x, y))
         columns = ['irr', 'temp', 'iph', 'isat', 'rsh', 'a']
 
-        os.makedirs(os.path.join(BASE_DIR, "training_data"), exist_ok=True)
+        os.makedirs(filepath, exist_ok=True)
 
         #save to a csv file to avoid regenerating
         df = pd.DataFrame(data, columns=columns)

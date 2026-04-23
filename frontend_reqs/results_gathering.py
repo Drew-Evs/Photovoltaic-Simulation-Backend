@@ -52,7 +52,7 @@ def build_figure(mismatch_panel, tracker, module, irr_list):
         
         axs[0, 1].set_title(f'PVMismatch Output {np.max(P_clean):.3f}W')
         axs[0, 1].set_xlabel('Voltage (V)')
-        axs[0, 1].set_ylabel('Power (W/m^2)', color='blue')
+        axs[0, 1].set_ylabel('Power (W)', color='blue')
         
     except Exception as e:
         axs[0, 1].set_title('PVMismatch Error')
@@ -70,7 +70,7 @@ def build_figure(mismatch_panel, tracker, module, irr_list):
     axs[1, 0].plot(original_v, original_p, 'g-', label='Implicit P-V')
     axs[1, 0].plot(track_v, track_p, 'ro', markersize=6, label='Tracked MPP')
     axs[1, 0].set_xlabel('Voltage (V)')
-    axs[1, 0].set_ylabel('Power (W/m^2)', color='blue')
+    axs[1, 0].set_ylabel('Power (W)', color='blue')
     axs[1, 0].legend()
 
     #calculate explicit curve
@@ -79,7 +79,7 @@ def build_figure(mismatch_panel, tracker, module, irr_list):
 
     axs[1, 1].set_title(f'Explicit Model Output {np.max(refactored_p):.3f}W')
     axs[1, 1].set_xlabel('Voltage (V)')
-    axs[1, 1].set_ylabel('Power (W/m^2)', color='blue')
+    axs[1, 1].set_ylabel('Power (W)', color='blue')
 
     plt.tight_layout()
     plt.show()

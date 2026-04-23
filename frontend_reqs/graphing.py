@@ -13,10 +13,10 @@ def plot_power_data(input_csv):
             return
         
         # Keep only data from 80,000 seconds onwards
-        df = df[df['time'] >= 160000].copy()
+        df = df[df['time'] >= 80000].copy()
         
         # Convert the time to hours, setting 80,000 seconds to Hour 0
-        df['time_hours'] = (df['time'] - 160000) / 3600
+        df['time_hours'] = (df['time'] - 80000) / 3600
 
         # Safety check in case the CSV doesn't go up to 80,000 yet
         if df.empty:

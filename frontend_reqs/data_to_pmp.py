@@ -66,7 +66,7 @@ def run_shade_to_pmp_new(module, input_csv, output_csv):
         shaded_subs = module.count_shaded_substrings(row)
         
         #calculate the time (based on 450 items meaning 24 hours)
-        elapsed_time = 192*i
+        elapsed_time = 96*i
         print(f'step {i}')
 
         output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
@@ -102,7 +102,7 @@ def pvmismatch_test(module, module_pvmm, input_csv, output_csv):
         shaded_subs = module.count_shaded_substrings(row)
         
         #calculate the time (based on 450 items meaning 24 hours)
-        elapsed_time = 192*i
+        elapsed_time = 96*i
 
         output.append({"time": elapsed_time, "power": pmp, "shaded_substrings": shaded_subs})
 
@@ -147,24 +147,24 @@ if __name__ == "__main__":
         
         module = Module('Prism_Solar_Technologies_Bi48_267BSTC', specs)
 
-        run_shade_to_pmp_new(module, input_csv, output_csv)
+        #run_shade_to_pmp_new(module, input_csv, output_csv)
 
-        # #create the pvmismatch version
-        # custom_const = PVconstants()
-        # a, iph, isat, rs, rsh = module.cell_list[0].get_params()
-        # T = 298.15 
-        # Vt_standard = (custom_const.k * T) / custom_const.q
-        # n_ideal = a / Vt_standard
-        # custom_const.k = custom_const.k * n_ideal
+        #create the pvmismatch version
+        custom_const = PVconstants()
+        a, iph, isat, rs, rsh = module.cell_list[0].get_params()
+        T = 298.15 
+        Vt_standard = (custom_const.k * T) / custom_const.q
+        n_ideal = a / Vt_standard
+        custom_const.k = custom_const.k * n_ideal
 
-        # lg_cells = [
-        #     pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=specs['I_sc']) 
-        #     for _ in range(48)
-        # ]
+        lg_cells = [
+            pvcell.PVcell(Rs=rs, Rsh=rsh, Isat1_T0=isat, Isat2_T0=0, Isc0_T0=iph, pvconst=custom_const, alpha_Isc=specs['I_sc']) 
+            for _ in range(48)
+        ]
 
-        # custom_layout = pvmodule.standard_cellpos_pat(nrows=8, ncols_per_substr=[2, 2, 2])
-        # panel_48 = pvmodule.PVmodule(cell_pos=custom_layout, pvcells=lg_cells)
-        # panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_48])
-        # pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
+        custom_layout = pvmodule.standard_cellpos_pat(nrows=8, ncols_per_substr=[2, 2, 2])
+        panel_48 = pvmodule.PVmodule(cell_pos=custom_layout, pvcells=lg_cells)
+        panel_string = pvstring.PVstring(numberMods=1, pvmods=[panel_48])
+        pvmm_sys = pvsystem.PVsystem(numberStrs=1, pvstrs=[panel_string])
 
-        # pvmismatch_test(module, pvmm_sys, input_csv, output_csv)
+        pvmismatch_test(module, panel_48, input_csv, output_csv)

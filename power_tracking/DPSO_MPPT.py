@@ -1,5 +1,9 @@
 import numpy as np
 import pvlib
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from power_tracking.refactored_whole_module import Module
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -13,7 +17,7 @@ class DPSO_MPPT:
         self.module = module
 
         #the number of particles to track
-        self.num_particles = num_particles
+        self.num_particles = 4
         #the efficiency of the converter (assume ~0.95) 
         self.nbb = nbb
         #the min and max load
@@ -43,7 +47,7 @@ class DPSO_MPPT:
         # self.c1, self.c2, self.w = 0.4, 0.1, 0.4
         #just an inertia weight
         self.w = 0.3
-        self.v_max = 0.05 
+        self.v_max = 0.25 
 
         #whether tracking globally or locally p&o variables
         self.state = 'Global'
@@ -348,73 +352,133 @@ def test_accuracy(module):
 
     print(s.getvalue())
 
+import pandas as pd
 # find the optimal parameters for the model
 def optimise_parameters(module):
-    # 1. Define the grid of parameters to test
-    w_values = [0.3, 0.4, 0.5, 0.7]
-    v_max_values = [0.02, 0.05, 0.10, 0.15]
+    w_values = [0.3, 0.5, 0.7]
+    v_max_values = [0.05, 0.10, 0.15, 0.25]
+    num_particles_values = [3, 4, 5]
     
-    # Lock the particle count to a reliable number for DPSO
-    particle_count = 5 
-
-    # 2. Generate fixed test scenarios to ensure a fair test
     print("Generating Test Scenarios...")
     test_scenarios = []
-    for _ in range(3): # Testing across 3 different random shading scenarios
-        temps = [random.randint(25, 65) for _ in range(module.Ns)]
-        irrs = [random.randint(100, 1000) for _ in range(module.Ns)]
 
+    irr_array_1 = [1000.0] * 48
+    irr_array_1[6:14] = [250] * 8
+    irr_array_1[43:50] = [250] * 7
+
+    irr_array_2 = irr_array_1.copy()
+    irr_array_2[6:18] = [100] * 12
+
+    irr_array_3 = irr_array_2.copy()
+    irr_array_3[22:34] = [300] * 12
+
+    for irrs in [irr_array_1, irr_array_2, irr_array_3]:
+        temps = [25] * 48
+        
         # calculate true peak to compare against
         module.set_cell_conditions(temps, irrs)
-        _, _, powers = module.calculate_iv()
-        true_pmp = powers[np.argmax(powers)]
+        _, powers = module.calculate_iv()
+        
+        # SAFETY NET: Prevent crashes on empty power arrays
+        if len(powers) > 0:
+            true_pmp = np.max(powers)
+        else:
+            true_pmp = 0.0
+            
         test_scenarios.append({'temps': temps, 'irrs': irrs, 'true_pmp': true_pmp})
 
-    # 3. Test all different combinations
     best_config = None
     best_score = float('inf')
+    results_data = []
 
-    print(f"{'w':<5} | {'v_max':<7} | {'Avg Error (W)':<15} | {'Time (s)':<10} | {'Score'}")
-    print("-" * 60)
+    print(f"{'Particles':<10} | {'w':<5} | {'v_max':<7} | {'Avg Error (W)':<15} | {'Time (s)':<10} | {'Score'}")
+    print("-" * 75)
 
-    for w, v_max in itertools.product(w_values, v_max_values):
-        total_error = 0
-
-        # create new tracker
-        tracker = DPSO_MPPT(particle_count, module, 0, module.voc)
-        
-        # Override the tuning parameters
+    for num_particles, w, v_max in itertools.product(num_particles_values, w_values, v_max_values):
+        tracker = DPSO_MPPT(num_particles, module, 0, module.voc)
         tracker.w = w
         tracker.v_max = v_max
 
-        # track time 
+        total_error = 0
         start_time = time.time()
+        
+        # --- NEW 25-SECOND TIMEOUT LOGIC ---
+        timeout_seconds = 25.0
+        is_failed = False
+        
         for scenario in test_scenarios:
             tracker.set_module_conditions(scenario['temps'], scenario['irrs'])
-            _, tracker_pmp, _ = tracker.global_optimisation()
 
-            # get absolute error
-            error = abs(tracker_pmp - scenario['true_pmp'])
-            total_error += error
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(tracker.global_optimisation)
+                try:
+                    _, tracker_pmp, _ = future.result(timeout=timeout_seconds)
+                    
+                    # get absolute error
+                    error = abs(tracker_pmp - scenario['true_pmp'])
+                    total_error += error
+                    
+                except concurrent.futures.TimeoutError:
+                    is_failed = True
+                    break
 
         elapsed = time.time() - start_time
-        avg_error = total_error / len(test_scenarios)
 
+        # --- HANDLE FAILURE ---
+        if is_failed:
+            print(f"{num_particles:<10} | {w:<5} | {v_max:<7} | {'FAILED (TIMEOUT)':<15} | {elapsed:<10.2f} | {'N/A'}")
+            
+            results_data.append({
+                'Num_Particles': num_particles,
+                'Inertia_Weight_w': w,
+                'Max_Velocity_v_max': v_max,
+                'Error_W': 'Failed',
+                'Time_s': elapsed,
+                'Score': 999999
+            })
+            continue 
+            
+        # --- HANDLE SUCCESS ---
+        avg_error = total_error / len(test_scenarios)
+        
         # score - want to penalize error heavily (e.g. 10x multiplier) while factoring in time
         score = (avg_error * 10) + elapsed 
         
-        print(f"{w:<5} | {v_max:<7} | {avg_error:<15.4f} | {elapsed:<10.2f} | {score:.2f}")
-        
+        print(f"{num_particles:<10} | {w:<5} | {v_max:<7} | {avg_error:<15.4f} | {elapsed:<10.2f} | {score:.2f}")
+
+        results_data.append({
+            'Num_Particles': num_particles,
+            'Inertia_Weight_w': w,
+            'Max_Velocity_v_max': v_max,
+            'Error_W': avg_error,
+            'Time_s': elapsed,
+            'Score': score
+        })
+
         if score < best_score:
             best_score = score
-            best_config = (w, v_max)
+            best_config = (num_particles, w, v_max)
 
-    print("-" * 60)
-    print(f"BEST CONFIGURATION FOUND:")
-    print(f"Inertia Weight (w): {best_config[0]}")
-    print(f"Max Velocity (v_max): {best_config[1]}")
-    print(f"Best Score: {best_score:.2f}")
+    print("-" * 75)
+    
+    if best_config:
+        print(f"BEST CONFIGURATION FOUND:")
+        print(f"Number of Particles: {best_config[0]}") 
+        print(f"Inertia Weight (w): {best_config[1]}")
+        print(f"Max Velocity (v_max): {best_config[2]}")
+        print(f"Best Score: {best_score:.2f}")
+    else:
+        print("All configurations timed out or failed!")
 
+    #want to save to a csv file
+    csv_filename = 'dpso_parameter_optimization_results.csv'
+    df = pd.DataFrame(results_data)
+    
+    #sort dataframe lowest to highest
+    df = df.sort_values(by='Score', ascending=True)
+    
+    df.to_csv(csv_filename, index=False)
+    print(f"\nOptimization complete! All test results saved to '{csv_filename}'")
 
 def power_over_time(module):
     #reset the simulation
@@ -556,17 +620,21 @@ if __name__ == "__main__":
     cec_modules = pvlib.pvsystem.retrieve_sam('CECmod')
     module = cec_modules['Prism_Solar_Technologies_Bi48_267BSTC']
     module_name = 'Prism_Solar_Technologies_Bi48_267BSTC'
-    datasheet_conditions = (
-        module['I_sc_ref'], 
-        module['V_mp_ref'], 
-        module['V_oc_ref'], 
-        module['I_mp_ref'],
-        module['N_s']
-    )
+    specs = {
+        'tech': module['Technology'],
+        'N_s': module['N_s'],
+        'I_sc': module['I_sc_ref'],
+        'V_oc': module['V_oc_ref'],
+        'I_mp': module['I_mp_ref'],
+        'V_mp': module['V_mp_ref'],
+        'alpha_sc': module['alpha_sc'],
+        'beta_oc': module['beta_oc'],
+        'gamma': module['gamma_r']/100
+    }
 
-    module = Module(datasheet_conditions, 'Prism_Solar_Technologies_Bi48_267BSTC')
+    module = Module('Prism_Solar_Technologies_Bi48_267BSTC', specs)
     
-    #optimise_parameters(module)
-    test_accuracy(module)
+    optimise_parameters(module)
+    #test_accuracy(module)
 
     #power_over_time(module)
