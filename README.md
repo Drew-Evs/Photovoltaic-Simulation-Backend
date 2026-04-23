@@ -24,7 +24,7 @@ Ensure you have Python 3.9+ installed. Install the required dependencies using p
 ```bash
 pip install -r requirements.txt
 ```
-Unzip the 3Dmodel folder to run the model using unity \
+Unzip the 3Dmodel folder to run the model using unity 
 
 To gather a snapshot:
 ```bash
@@ -36,7 +36,7 @@ To gather a day of data:
 python frontend_reqs/data_harvester.py
 ```
 
-Press play on the unity model to run the simulator and gather the shade data \
+Press play on the unity model to run the simulator and gather the shade data
 
 If gathered a day of data can run:
 ```bash
@@ -47,7 +47,7 @@ To generate the day snapshot data
 
 
 ## Demo
-Run the demo.ipynb file for more information on the process \
+Run the demo.ipynb file for more information on the process
 Shows the steps:
 1. Module parameter prediction
 2. Cell parameter prediction and ANN
