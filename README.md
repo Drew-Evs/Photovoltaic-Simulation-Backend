@@ -7,11 +7,11 @@ Additionally, it includes a UDP server component designed to harvest real-time i
 * **data_harvester.py** Harvest data from the Unity simulation.
 * **data_to_pmp.py** Uses explicit model or a tracker to convert irradiance data to a power over time data.
 * **results_gathering.py** Takes a snapshot of the panel shading from Unity and converts to a results dashboard.
-* **graping.py** Converts the power over time data to a curve.
+* **graphing.py** Converts the power over time data to a curve.
 
 
 ## Features
-* **Cell Single Dide Modelling:** Uses a heuristic method to model cell parameters, 
+* **Cell Single Diode Modelling:** Uses a heuristic method to model cell parameters, 
 * **Dynamic Partial Shading:** Simulates complex shading patterns across individual cells and bypass diode substrings.
 * **DPSO MPPT Tracking:** A custom hybrid tracking algorithm that uses Particle Swarm Optimization to find the global maximum and Local P&O for fine-tuning.
 * **Unity Integration:** A built-in UDP server (`results_gathering.py`) to receive real-time raytraced irradiance arrays from Unity.
@@ -24,6 +24,8 @@ Ensure you have Python 3.9+ installed. Install the required dependencies using p
 ```bash
 pip install -r requirements.txt
 ```
+
+The Unity zip folder 3Dmodel is available upon request from sc23s2e@leeds.ac.uk
 Unzip the 3Dmodel folder to run the model using unity 
 
 To gather a snapshot:
