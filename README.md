@@ -25,7 +25,7 @@ Ensure you have Python 3.9+ installed. Install the required dependencies using p
 pip install -r requirements.txt
 ```
 
-The Unity zip folder 3Dmodel is available upon request from sc23s2e@leeds.ac.uk
+The Unity zip folder 3Dmodel is available upon request from sc23s2e@leeds.ac.uk \\
 Unzip the 3Dmodel folder to run the model using unity 
 
 To gather a snapshot:
